@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSR 공고 모니터링</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f6fb; color: #1a1a2e; font-size: 14px; }
+
+  .header { background: #fff; border-bottom: 1px solid #e5e8f0; padding: 14px 24px; display: flex; align-items: center; gap: 10px; }
+  .header h1 { font-size: 16px; font-weight: 700; }
+  .header .scan-info { margin-left: auto; font-size: 12px; color: #aaa; }
+  .header .scan-info span { color: #3b82f6; font-weight: 600; }
+
+  .stats { display: flex; gap: 10px; padding: 16px 24px 0; }
+  .stat { background: #fff; border-radius: 10px; padding: 14px 20px; flex: 1; border: 1px solid #e5e8f0; }
+  .stat .n { font-size: 26px; font-weight: 800; line-height: 1; }
+  .stat .l { font-size: 11px; color: #888; margin-top: 3px; }
+  .stat.red .n { color: #ef4444; }
+  .stat.orange .n { color: #f59e0b; }
+  .stat.blue .n { color: #3b82f6; }
+  .stat.purple .n { color: #8b5cf6; }
+  .stat.green .n { color: #22c55e; }
+
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 16px 24px 24px; }
+
+  .panel { background: #fff; border-radius: 10px; border: 1px solid #e5e8f0; overflow: hidden; }
+  .panel-head { padding: 12px 16px; border-bottom: 1px solid #f0f2f8; display: flex; align-items: center; gap: 8px; }
+  .panel-head h2 { font-size: 13px; font-weight: 700; }
+  .panel-head .count { margin-left: auto; font-size: 11px; background: #f0f4ff; color: #3b82f6; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+  .tabs { display: flex; padding: 0 16px; border-bottom: 1px solid #f0f2f8; }
+  .tab { padding: 10px 14px; font-size: 12px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; white-space: nowrap; }
+  .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 700; }
+
+  /* NEWS ITEMS */
+  .news-list { max-height: 560px; overflow-y: auto; }
+  .news-item { padding: 14px 16px; border-bottom: 1px solid #f5f6fa; }
+  .news-item:last-child { border-bottom: none; }
+  .news-item:hover { background: #fafbff; }
+
+  .news-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+  .news-badges { display: flex; gap: 5px; flex-wrap: wrap; flex-shrink: 0; margin-top: 1px; }
+  .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .badge-recruit { background: #fef3c7; color: #b45309; }
+  .badge-news    { background: #e0f2fe; color: #0369a1; }
+  .badge-tender  { background: #fce7f3; color: #9d174d; }
+  .badge-open    { background: #dcfce7; color: #166534; }
+  .badge-closed  { background: #fee2e2; color: #991b1b; }
+  .badge-track   { background: #ede9fe; color: #6d28d9; }
+
+  .news-body { flex: 1; min-width: 0; }
+  .news-company { font-size: 11px; font-weight: 700; color: #3b82f6; margin-bottom: 3px; }
+  .news-title { font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 5px; line-height: 1.4; }
+  .news-summary { font-size: 12px; color: #4b5563; line-height: 1.6; margin-bottom: 8px; }
+
+  /* TRACK BOX — 핵심 추가 */
+  .track-box { background: #faf7ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; }
+  .track-box .track-label { font-size: 10px; font-weight: 800; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .track-box .track-text { font-size: 12px; color: #374151; line-height: 1.5; }
+  .track-box .track-when { display: inline-block; margin-top: 5px; font-size: 11px; font-weight: 700; color: #7c3aed; background: #ede9fe; padding: 2px 8px; border-radius: 4px; }
+
+  .news-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .news-date { font-size: 11px; color: #aaa; }
+  .news-link { font-size: 11px; color: #3b82f6; text-decoration: none; }
+  .news-link:hover { text-decoration: underline; }
+  .deadline-open { font-size: 11px; background: #dcfce7; color: #166534; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+  .deadline-closed { font-size: 11px; background: #f1f5f9; color: #94a3b8; padding: 2px 7px; border-radius: 4px; font-weight: 600; text-decoration: line-through; }
+
+  .empty-state { padding: 48px 24px; text-align: center; color: #bbb; }
+  .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+  .empty-state p { font-size: 13px; line-height: 1.6; }
+
+  .new-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ef4444; margin-right: 5px; vertical-align: middle; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  /* COMPANY LIST */
+  .company-list { max-height: 620px; overflow-y: auto; }
+  .company-row { padding: 10px 14px; border-bottom: 1px solid #f5f6fa; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .company-row:last-child { border-bottom: none; }
+  .company-row:hover { background: #fafbff; }
+  .company-row.has-news { background: #fffbf0; }
+  .company-name-text { font-size: 12px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .company-news-count { font-size: 10px; background: #ef4444; color: #fff; padding: 1px 6px; border-radius: 10px; font-weight: 700; flex-shrink: 0; }
+  .priority-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .p-high { background: #f59e0b; }
+  .p-cond { background: #3b82f6; }
+  .p-low  { background: #d1d5db; }
+
+  .filter-row { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #f0f2f8; flex-wrap: wrap; }
+  .f-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid #e5e8f0; background: #fff; font-size: 11px; cursor: pointer; color: #666; }
+  .f-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 600; }
+
+  .search-wrap { padding: 10px 14px; border-bottom: 1px solid #f0f2f8; }
+  .search-input { width: 100%; padding: 7px 10px; border: 1px solid #e5e8f0; border-radius: 7px; font-size: 12px; outline: none; }
+  .search-input:focus { border-color: #3b82f6; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span style="font-size:18px">📡</span>
+  <h1>CSR 공고 모니터링</h1>
+  <div class="scan-info">마지막 스캔: <span id="lastScan">—</span></div>
+</div>
+
+<div class="stats">
+  <div class="stat red">  <div class="n" id="sOpen">0</div>  <div class="l">모집 진행 중</div></div>
+  <div class="stat orange"><div class="n" id="sRecruit">0</div><div class="l">모집·공모 발견</div></div>
+  <div class="stat purple"><div class="n" id="sTrack">0</div> <div class="l">추적 예정</div></div>
+  <div class="stat blue">  <div class="n" id="sNews">0</div>  <div class="l">뉴스·소식</div></div>
+  <div class="stat green"> <div class="n" id="sTotal">48</div> <div class="l">모니터링 기업</div></div>
+</div>
+
+<div class="layout">
+  <div>
+    <div class="panel">
+      <div class="panel-head">
+        <span>📋</span>
+        <h2>수집된 공고 및 뉴스</h2>
+        <div class="count" id="feedCount">0건</div>
+      </div>
+      <div class="tabs">
+        <div class="tab active" onclick="setTab('all',this)">전체</div>
+        <div class="tab" onclick="setTab('open',this)">🟢 모집 중</div>
+        <div class="tab" onclick="setTab('recruit',this)">📢 모집·공모</div>
+        <div class="tab" onclick="setTab('track',this)">🔮 추적 예정</div>
+        <div class="tab" onclick="setTab('news',this)">📰 뉴스</div>
+      </div>
+      <div class="news-list" id="newsFeed">
+        <div class="empty-state"><div class="icon">🔍</div><p>수집된 공고가 없습니다.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <div class="panel-head"><span>🏢</span><h2>모니터링 기업</h2></div>
+      <div class="search-wrap">
+        <input class="search-input" id="companySearch" placeholder="기업명 검색..." oninput="renderCompanies()">
+      </div>
+      <div class="filter-row">
+        <button class="f-btn active" onclick="setCompanyFilter('all',this)">전체</button>
+        <button class="f-btn" onclick="setCompanyFilter('high',this)">⭐ 우선</button>
+        <button class="f-btn" onclick="setCompanyFilter('cond',this)">🔵 조건부</button>
+        <button class="f-btn" onclick="setCompanyFilter('news',this)">🔴 공고있음</button>
+      </div>
+      <div class="company-list" id="companyList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COMPANIES = [
+  {name:"삼성전자",priority:"cond"},{name:"LG전자",priority:"cond"},
+  {name:"네이버 커넥트재단",priority:"cond"},{name:"카카오임팩트 재단",priority:"cond"},
+  {name:"국민은행",priority:"high"},{name:"우리은행",priority:"high"},
+  {name:"현대자동차그룹",priority:"high"},{name:"기아",priority:"cond"},
+  {name:"한국전력공사",priority:"cond"},{name:"한국가스공사",priority:"low"},
+  {name:"아산나눔재단",priority:"cond"},{name:"현대차 정몽구 재단",priority:"cond"},
+  {name:"SK행복나눔재단",priority:"cond"},{name:"KT그룹희망나눔재단",priority:"high"},
+  {name:"포스코청암재단",priority:"cond"},{name:"CJ나눔재단",priority:"high"},
+  {name:"신한희망재단",priority:"high"},{name:"교보교육재단",priority:"high"},
+  {name:"하나금융그룹 / 하나금융나눔재단",priority:"high"},{name:"IBK행복나눔재단",priority:"high"},
+  {name:"iM사회공헌재단(DGB금융그룹)",priority:"high"},{name:"NH농협은행",priority:"high"},
+  {name:"신용카드사회공헌재단",priority:"high"},{name:"KRX국민행복재단",priority:"high"},
+  {name:"롯데장학재단",priority:"high"},{name:"미래에셋박현주재단",priority:"high"},
+  {name:"넥슨재단",priority:"cond"},{name:"CJ올리브네트웍스",priority:"high"},
+  {name:"롯데이노베이트",priority:"high"},{name:"HD현대1%나눔재단 / HD현대",priority:"high"},
+  {name:"GS칼텍스",priority:"high"},{name:"LS그룹",priority:"high"},
+  {name:"NC문화재단",priority:"cond"},{name:"스마일게이트 희망스튜디오 / 퓨처랩",priority:"cond"},
+  {name:"넷마블문화재단",priority:"cond"},{name:"웹젠",priority:"cond"},
+  {name:"KT&G장학재단",priority:"high"},{name:"BNK금융그룹 / BNK부산은행",priority:"high"},
+  {name:"신협사회공헌재단",priority:"high"},{name:"새마을금고중앙회 / MG지역희망나눔재단",priority:"high"},
+  {name:"두산연강재단",priority:"low"},{name:"유한재단",priority:"low"},
+  {name:"한화그룹",priority:"cond"},{name:"현대백화점사회복지재단",priority:"high"},
+  {name:"이랜드재단 / 이랜드복지재단",priority:"high"},
+  {name:"메르세데스-벤츠 사회공헌위원회",priority:"cond"},
+  {name:"BMW 코리아 미래재단",priority:"cond"},
+  {name:"폭스바겐그룹코리아 / Volkswagen Group WE: Foundation",priority:"cond"},
+];
+
+// status: "open" | "closed" | "news"
+// trackNote: 다음 모집 예측 & 액션 가이드
+const FINDINGS = [
+  {
+    id: 1,
+    company: "CJ나눔재단",
+    type: "recruit",
+    status: "closed",
+    title: "2026 꿈키움 문화다양성 교실 참여기관 모집",
+    summary: "전국 지역아동센터 600곳 및 문화다양성 교사 600명 선발. 아동 약 9,000명 대상 운영. 이번 회차 모집은 5월 종료.",
+    date: "2026-07-16",
+    deadline: "2026-05-20",
+    url: "https://cjnews.cj.net/%EB%8B%A4%EB%A6%84%EC%9D%98-%EA%B0%80%EC%B9%98%EB%A5%BC-%EB%B0%B0%EC%9A%B0%EB%8B%A4-cj%EB%8F%84%EB%84%88%EC%8A%A4%EC%BA%A0%ED%94%84-2026-%EA%BF%88%ED%82%A4%EC%9B%80/",
+    isNew: true,
+    trackNote: "꿈키움 문화다양성 교실은 연례 사업으로, 1~2월에 진행기관을 모집하는 패턴. 2027년 모집은 2027년 1~2월 예상. 단, CJ도너스캠프는 지역아동센터 직접 모집 구조라 외부 운영기관 진입 여지가 적음. 대신 교육 콘텐츠·커리큘럼 공급 형태로 제안 접근 권장.",
+    trackWhen: "2026년 11~12월 — 다음 사업연도 기획 시점에 제안"
+  },
+  {
+    id: 2,
+    company: "HD현대1%나눔재단 / HD현대",
+    type: "news",
+    status: "news",
+    title: "HD현대 파이썬 교육 — 아이들과미래재단이 수행기관",
+    summary: "HD현대1%나눔재단 후원으로 저소득층 청소년·자립준비청년 대상 파이썬 코딩 교육 운영. 아이들과미래재단이 현 수행기관.",
+    date: "2026-07-16",
+    deadline: null,
+    url: "http://m.bokjinews.com/news/articleView.html?idxno=113279",
+    isNew: true,
+    trackNote: "현재 수행기관(아이들과미래재단)의 계약 형태상 연 단위 갱신 가능성이 높음. 2026년 겨울방학 프로그램(1월)이 끝나면 2027년 프로그램 기획이 8~9월쯤 시작됨. HD현대1%나눔재단 담당자 컨텍 후 KMA 역량 소개 + 공동기획 제안 타이밍은 하반기. 아이들과미래재단과 협력 구조도 검토 가능.",
+    trackWhen: "2026년 8~9월 — 다음 연도 사업기획 착수 시점 공략"
+  },
+  {
+    id: 3,
+    company: "넥슨재단",
+    type: "news",
+    status: "news",
+    title: "넥슨재단 × 대전광역시사회서비스원 업무협약 — ON 프로젝트",
+    summary: "장애아동·취약계층 청소년 대상 게임 IP 기반 디지털 교육 협력. 지자체 사회서비스원과 협약 맺는 방식으로 파트너 확장 중.",
+    date: "2026-07-16",
+    deadline: null,
+    url: "https://www.betanews.net/article/view/beta202605110052",
+    isNew: true,
+    trackNote: "넥슨재단은 지역 파트너 협약 방식으로 사업을 확산하는 구조. 서울/수도권 파트너 공백이 있을 수 있음. KMA가 교육 운영 전문기관으로 협약 제안 가능. 현재 컨텍 중(전화 대기)이므로 이 소식을 빌미로 '지역 확산 협력' 각도로 후속 컨텍 유리.",
+    trackWhen: "지금 즉시 — 현재 컨텍 진행 중. 이 협약 사례 언급하며 수도권 파트너 제안"
+  },
+  {
+    id: 4,
+    company: "KT그룹희망나눔재단",
+    type: "recruit",
+    status: "closed",
+    title: "2026년 온라인 학습 멘토 모집",
+    summary: "대학(원)생 멘토 모집 형태로 진행. 직접적인 운영기관 공모는 아니나 재단의 멘토링 사업 규모·방식 파악 가능.",
+    date: "2026-07-16",
+    deadline: null,
+    url: "https://ktgf.or.kr/",
+    isNew: true,
+    trackNote: "KT희망나눔재단의 IT교육·멘토링 사업은 연중 운영. 하반기(9~10월)에 이듬해 사업 파트너·운영기관 공모를 내는 경향. KT그룹 계열 특성상 IT교육 전문기관 우선 협력 구조이므로, KMA의 디지털·AI교육 역량을 전면에 내세운 제안서로 9월 전에 담당자 컨텍 필요.",
+    trackWhen: "2026년 8~9월 — 하반기 사업기획 시점 공략"
+  }
+];
+
+let currentTab = 'all';
+let companyFilter = 'all';
+
+function setTab(t, el) {
+  currentTab = t;
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderFeed();
+}
+
+function setCompanyFilter(f, el) {
+  companyFilter = f;
+  document.querySelectorAll('.f-btn').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderCompanies();
+}
+
+function statusBadge(item) {
+  if (item.status === 'open')   return '<span class="badge badge-open">🟢 모집 중</span>';
+  if (item.status === 'closed') return '<span class="badge badge-closed">🔴 마감</span>';
+  return '';
+}
+function typeBadge(type) {
+  if (type === 'recruit') return '<span class="badge badge-recruit">📢 모집·공모</span>';
+  if (type === 'tender')  return '<span class="badge badge-tender">📑 입찰</span>';
+  return '<span class="badge badge-news">📰 뉴스</span>';
+}
+
+function renderFeed() {
+  const feed = document.getElementById('newsFeed');
+  let data = [...FINDINGS];
+  if (currentTab === 'open')    data = data.filter(f => f.status === 'open');
+  if (currentTab === 'recruit') data = data.filter(f => f.type === 'recruit');
+  if (currentTab === 'track')   data = data.filter(f => f.trackNote);
+  if (currentTab === 'news')    data = data.filter(f => f.type === 'news');
+  data.sort((a,b) => {
+    const order = {open:0, closed:1, news:2};
+    return (order[a.status]||2) - (order[b.status]||2) || (b.isNew?1:0)-(a.isNew?1:0);
+  });
+  document.getElementById('feedCount').textContent = data.length + '건';
+  if (data.length === 0) {
+    feed.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>해당 탭에 수집된 내용이 없습니다.</p></div>`;
+    return;
+  }
+  feed.innerHTML = data.map(f => `
+    <div class="news-item">
+      <div class="news-top">
+        <div class="news-badges">${typeBadge(f.type)}${statusBadge(f)}</div>
+      </div>
+      <div class="news-body">
+        <div class="news-company">${f.isNew ? '<span class="new-dot"></span>' : ''}${f.company}</div>
+        <div class="news-title">${f.title}</div>
+        <div class="news-summary">${f.summary}</div>
+        ${f.trackNote ? `
+        <div class="track-box">
+          <div class="track-label">🔮 추적 가이드</div>
+          <div class="track-text">${f.trackNote}</div>
+          ${f.trackWhen ? `<div class="track-when">⏰ ${f.trackWhen}</div>` : ''}
+        </div>` : ''}
+        <div class="news-meta">
+          <span class="news-date">수집: ${f.date}</span>
+          ${f.deadline
+            ? (f.status === 'open'
+                ? `<span class="deadline-open">마감 ${f.deadline}</span>`
+                : `<span class="deadline-closed">마감 ${f.deadline}</span>`)
+            : ''}
+          ${f.url ? `<a class="news-link" href="${f.url}" target="_blank">🔗 원문</a>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function renderCompanies() {
+  const q = document.getElementById('companySearch').value.trim();
+  const companiesWithNews = new Set(FINDINGS.map(f => f.company));
+  let list = [...COMPANIES];
+  if (q) list = list.filter(c => c.name.includes(q));
+  if (companyFilter === 'high') list = list.filter(c => c.priority === 'high');
+  if (companyFilter === 'cond') list = list.filter(c => c.priority === 'cond');
+  if (companyFilter === 'news') list = list.filter(c => companiesWithNews.has(c.name));
+  list.sort((a,b) => (companiesWithNews.has(a.name)?0:1)-(companiesWithNews.has(b.name)?0:1));
+  const el = document.getElementById('companyList');
+  el.innerHTML = list.map(c => {
+    const cnt = FINDINGS.filter(f => f.company === c.name).length;
+    const dotCls = c.priority==='high'?'p-high':c.priority==='cond'?'p-cond':'p-low';
+    return `<div class="company-row ${cnt?'has-news':''}" onclick="filterByCompany('${c.name.replace(/'/g,"\\'")}')">
+      <div class="priority-dot ${dotCls}"></div>
+      <div class="company-name-text" title="${c.name}">${c.name}</div>
+      ${cnt ? `<div class="company-news-count">${cnt}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function filterByCompany(name) {
+  const data = FINDINGS.filter(f => f.company === name);
+  if (!data.length) return;
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+  const feed = document.getElementById('newsFeed');
+  document.getElementById('feedCount').textContent = data.length + '건';
+  feed.innerHTML = data.map(f => `
+    <div class="news-item">
+      <div class="news-top"><div class="news-badges">${typeBadge(f.type)}${statusBadge(f)}</div></div>
+      <div class="news-body">
+        <div class="news-company">${f.company}</div>
+        <div class="news-title">${f.title}</div>
+        <div class="news-summary">${f.summary}</div>
+        ${f.trackNote ? `
+        <div class="track-box">
+          <div class="track-label">🔮 추적 가이드</div>
+          <div class="track-text">${f.trackNote}</div>
+          ${f.trackWhen ? `<div class="track-when">⏰ ${f.trackWhen}</div>` : ''}
+        </div>` : ''}
+        <div class="news-meta">
+          <span class="news-date">수집: ${f.date}</span>
+          ${f.deadline ? `<span class="${f.status==='open'?'deadline-open':'deadline-closed'}">마감 ${f.deadline}</span>` : ''}
+          ${f.url ? `<a class="news-link" href="${f.url}" target="_blank">🔗 원문</a>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function updateStats() {
+  document.getElementById('sOpen').textContent    = FINDINGS.filter(f => f.status==='open').length;
+  document.getElementById('sRecruit').textContent = FINDINGS.filter(f => f.type==='recruit').length;
+  document.getElementById('sTrack').textContent   = FINDINGS.filter(f => f.trackNote).length;
+  document.getElementById('sNews').textContent    = FINDINGS.filter(f => f.type==='news').length;
+  document.getElementById('lastScan').textContent = FINDINGS.length > 0
+    ? FINDINGS.reduce((a,b)=>a.date>b.date?a:b).date : '아직 없음';
+}
+
+updateStats();
+renderFeed();
+renderCompanies();
+</script>
+</body>
+</html>
