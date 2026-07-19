@@ -1,341 +1,316 @@
-"""
-CSR 공고 모니터링 — 자동 업데이트 스크립트
-매일 GitHub Actions로 실행되어 뉴스를 수집하고 index.html을 갱신합니다.
-- 7일 이내 항목: FINDINGS (메인 피드)
-- 7일 이상 항목: ARCHIVE (주간 그룹화, 최대 26주 보관)
-"""
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSR 공고 모니터링</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f6fb; color: #1a1a2e; font-size: 14px; display: flex; flex-direction: column; }
 
-import feedparser
-import json
-import re
-import urllib.parse
-from datetime import datetime, timedelta
-import hashlib
-import time
+  .header { background: #fff; border-bottom: 1px solid #e5e8f0; padding: 10px 24px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .header h1 { font-size: 16px; font-weight: 700; }
+  .header .scan-info { margin-left: auto; font-size: 12px; color: #aaa; }
+  .header .scan-info span { color: #3b82f6; font-weight: 600; }
 
-# ── 모니터링 대상 기업 ──────────────────────────────────────────────────
-COMPANIES = [
-    {"name": "국민은행", "priority": "high"},
-    {"name": "우리은행", "priority": "high"},
-    {"name": "현대자동차그룹", "priority": "high"},
-    {"name": "KT그룹희망나눔재단", "priority": "high"},
-    {"name": "CJ나눔재단", "priority": "high"},
-    {"name": "신한희망재단", "priority": "high"},
-    {"name": "교보교육재단", "priority": "high"},
-    {"name": "하나금융그룹", "priority": "high"},
-    {"name": "IBK행복나눔재단", "priority": "high"},
-    {"name": "iM사회공헌재단", "priority": "high"},
-    {"name": "NH농협은행", "priority": "high"},
-    {"name": "신용카드사회공헌재단", "priority": "high"},
-    {"name": "KRX국민행복재단", "priority": "high"},
-    {"name": "롯데장학재단", "priority": "high"},
-    {"name": "미래에셋박현주재단", "priority": "high"},
-    {"name": "CJ올리브네트웍스", "priority": "high"},
-    {"name": "롯데이노베이트", "priority": "high"},
-    {"name": "HD현대1%나눔재단", "priority": "high"},
-    {"name": "GS칼텍스", "priority": "high"},
-    {"name": "LS그룹", "priority": "high"},
-    {"name": "KT&G장학재단", "priority": "high"},
-    {"name": "BNK금융그룹", "priority": "high"},
-    {"name": "신협사회공헌재단", "priority": "high"},
-    {"name": "새마을금고중앙회", "priority": "high"},
-    {"name": "현대백화점사회복지재단", "priority": "high"},
-    {"name": "이랜드재단", "priority": "high"},
-    {"name": "삼성전자", "priority": "cond"},
-    {"name": "LG전자", "priority": "cond"},
-    {"name": "네이버 커넥트재단", "priority": "cond"},
-    {"name": "카카오임팩트재단", "priority": "cond"},
-    {"name": "넥슨재단", "priority": "cond"},
-    {"name": "NC문화재단", "priority": "cond"},
-    {"name": "스마일게이트 희망스튜디오", "priority": "cond"},
-    {"name": "넷마블문화재단", "priority": "cond"},
-    {"name": "한화그룹", "priority": "cond"},
-    {"name": "SK행복나눔재단", "priority": "cond"},
-    {"name": "포스코청암재단", "priority": "cond"},
-    {"name": "아산나눔재단", "priority": "cond"},
-    {"name": "현대차 정몽구 재단", "priority": "cond"},
-    {"name": "BMW 코리아 미래재단", "priority": "cond"},
-    {"name": "메르세데스-벤츠 사회공헌위원회", "priority": "cond"},
-]
+  .stats { display: flex; gap: 10px; padding: 10px 24px 0; flex-shrink: 0; }
+  .stat { background: #fff; border-radius: 10px; padding: 10px 16px; flex: 1; border: 1px solid #e5e8f0; }
+  .stat .n { font-size: 22px; font-weight: 800; line-height: 1; }
+  .stat .l { font-size: 11px; color: #888; margin-top: 2px; }
+  .stat.red .n { color: #ef4444; }
+  .stat.orange .n { color: #f59e0b; }
+  .stat.purple .n { color: #8b5cf6; }
+  .stat.blue .n { color: #3b82f6; }
+  .stat.green .n { color: #22c55e; }
 
-# ── 검색 키워드 ──────────────────────────────────────────────────────────
-COMPANY_KEYWORDS = [
-    "사회공헌 운영기관 모집",
-    "사회공헌 수행기관 공모",
-    "교육 협력기관 모집",
-]
+  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 12px; padding: 10px 24px 12px; flex: 1; min-height: 0; }
 
-GENERAL_KEYWORDS = [
-    "기업재단 교육 운영기관 모집 2026",
-    "사회공헌 수행기관 공모 2026",
-    "취약계층 교육 협력기관 모집",
-    "청소년 교육 위탁운영 공모 기업재단",
-    "ESG 교육사업 운영기관 모집",
-]
+  .panel { background: #fff; border-radius: 10px; border: 1px solid #e5e8f0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panel-head { padding: 10px 16px; border-bottom: 1px solid #f0f2f8; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .panel-head h2 { font-size: 13px; font-weight: 700; }
+  .panel-head .count { margin-left: auto; font-size: 11px; background: #f0f4ff; color: #3b82f6; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
 
-# ── 헬퍼: 주간 범위 ────────────────────────────────────────────────────
-def get_week_range(date_str):
-    """날짜의 주간 범위 반환 (월~일요일)"""
-    try:
-        d = datetime.strptime(date_str, '%Y-%m-%d')
-        monday = d - timedelta(days=d.weekday())
-        sunday = monday + timedelta(days=6)
-        return f"{monday.strftime('%Y-%m-%d')} ~ {sunday.strftime('%Y-%m-%d')}"
-    except Exception:
-        return "날짜 미상"
+  .tabs { display: flex; padding: 0 16px; border-bottom: 1px solid #f0f2f8; flex-shrink: 0; overflow-x: auto; }
+  .tab { padding: 8px 12px; font-size: 12px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; white-space: nowrap; }
+  .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 700; }
 
-# ── 헬퍼: HTML에서 JS 배열 추출 ───────────────────────────────────────
-def extract_js_array(html, var_name, start_marker, end_marker):
-    """HTML 마커 사이에서 const VAR = [...] 추출"""
-    block = re.search(
-        rf'{re.escape(start_marker)}[\s\S]*?{re.escape(end_marker)}', html
-    )
-    if not block:
-        return []
-    arr = re.search(rf'const {var_name} = (\[[\s\S]*?\]);', block.group(0))
-    if arr:
-        try:
-            return json.loads(arr.group(1))
-        except Exception:
-            return []
-    return []
+  .news-list { flex: 1; overflow-y: auto; min-height: 0; }
+  .news-item { padding: 12px 16px; border-bottom: 1px solid #f5f6fa; }
+  .news-item:last-child { border-bottom: none; }
+  .news-item:hover { background: #fafbff; }
+  .news-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 5px; }
+  .badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .badge-recruit { background: #fef3c7; color: #b45309; }
+  .badge-news { background: #e0f2fe; color: #0369a1; }
+  .badge-tender { background: #fce7f3; color: #9d174d; }
+  .badge-open { background: #dcfce7; color: #166534; }
+  .badge-closed { background: #fee2e2; color: #991b1b; }
+  .news-company { font-size: 11px; font-weight: 700; color: #3b82f6; margin-bottom: 2px; }
+  .news-title { font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 4px; line-height: 1.4; }
+  .news-summary { font-size: 12px; color: #4b5563; line-height: 1.6; margin-bottom: 6px; }
+  .track-box { background: #faf7ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; }
+  .track-label { font-size: 10px; font-weight: 800; color: #7c3aed; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .track-text { font-size: 12px; color: #374151; line-height: 1.5; }
+  .track-when { display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 700; color: #7c3aed; background: #ede9fe; padding: 2px 8px; border-radius: 4px; }
+  .news-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .news-date { font-size: 11px; color: #aaa; }
+  .news-link { font-size: 11px; color: #3b82f6; text-decoration: none; }
+  .news-link:hover { text-decoration: underline; }
+  .deadline-open { font-size: 11px; background: #dcfce7; color: #166534; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+  .deadline-closed { font-size: 11px; background: #f1f5f9; color: #94a3b8; padding: 2px 7px; border-radius: 4px; font-weight: 600; text-decoration: line-through; }
+  .new-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ef4444; margin-right: 5px; vertical-align: middle; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
 
-# ── 뉴스 수집 ────────────────────────────────────────────────────────────
-def fetch_google_news(query, days=30, max_results=5):
-    encoded = urllib.parse.quote(query)
-    url = f"https://news.google.com/rss/search?q={encoded}&hl=ko&gl=KR&ceid=KR:ko"
-    try:
-        feed = feedparser.parse(url)
-        cutoff = datetime.now() - timedelta(days=days)
-        results = []
-        for entry in feed.entries[:max_results]:
-            try:
-                pub = datetime(*entry.published_parsed[:6])
-                if pub < cutoff:
-                    continue
-                title = re.sub(r'\s*-\s*[^-]+$', '', entry.title).strip()
-                summary = re.sub('<[^>]+>', '', entry.get('summary', ''))[:250]
-                results.append({
-                    'title': title,
-                    'url': entry.link,
-                    'date': pub.strftime('%Y-%m-%d'),
-                    'summary': summary,
-                })
-            except Exception:
-                continue
-        return results
-    except Exception as e:
-        print(f"  검색 오류 ({query[:30]}...): {e}")
-        return []
+  .archive-week { border-bottom: 1px solid #f0f2f8; }
+  .archive-week:last-child { border-bottom: none; }
+  .archive-week-header { padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; background: #f8f9ff; font-size: 12px; font-weight: 700; color: #374151; user-select: none; }
+  .archive-week-header:hover { background: #eef2ff; }
+  .week-count { font-size: 11px; background: #e0e7ff; color: #4338ca; padding: 1px 7px; border-radius: 10px; font-weight: 700; }
+  .toggle-icon { margin-left: auto; font-size: 11px; color: #aaa; }
 
-# ── 분류 ────────────────────────────────────────────────────────────────
-def classify_type(title, summary):
-    text = title + ' ' + summary
-    if any(w in text for w in ['입찰', '낙찰', '나라장터', '용역 공고']):
-        return 'tender'
-    if any(w in text for w in ['모집', '공모', '수행기관', '운영기관', '협력기관', '신청 접수', '참여기관']):
-        return 'recruit'
-    return 'news'
+  .empty-state { padding: 40px 24px; text-align: center; color: #bbb; }
+  .empty-state .icon { font-size: 28px; margin-bottom: 8px; }
+  .empty-state p { font-size: 13px; line-height: 1.6; }
 
-def classify_status(title, summary, date_str):
-    text = title + ' ' + summary
-    if any(w in text for w in ['종료', '마감됨', '선정 완료', '완료']):
-        return 'closed'
-    pub_date = datetime.strptime(date_str, '%Y-%m-%d')
-    age_days = (datetime.now() - pub_date).days
-    if age_days <= 14:
-        return 'open'
-    return 'closed'
+  .search-wrap { padding: 8px 14px; border-bottom: 1px solid #f0f2f8; flex-shrink: 0; }
+  .search-input { width: 100%; padding: 6px 10px; border: 1px solid #e5e8f0; border-radius: 7px; font-size: 12px; outline: none; }
+  .search-input:focus { border-color: #3b82f6; }
+  .filter-row { display: flex; gap: 5px; padding: 8px 14px; border-bottom: 1px solid #f0f2f8; flex-wrap: wrap; flex-shrink: 0; }
+  .f-btn { padding: 3px 9px; border-radius: 6px; border: 1px solid #e5e8f0; background: #fff; font-size: 11px; cursor: pointer; color: #666; }
+  .f-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 600; }
+  .company-list { flex: 1; overflow-y: auto; min-height: 0; }
+  .company-row { padding: 8px 14px; border-bottom: 1px solid #f5f6fa; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .company-row:last-child { border-bottom: none; }
+  .company-row:hover { background: #fafbff; }
+  .company-row.has-news { background: #fffbf0; }
+  .company-name-text { font-size: 12px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .company-news-count { font-size: 10px; background: #ef4444; color: #fff; padding: 1px 6px; border-radius: 10px; font-weight: 700; flex-shrink: 0; }
+  .priority-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .p-high { background: #f59e0b; }
+  .p-cond { background: #3b82f6; }
+  .p-low { background: #d1d5db; }
+</style>
+</head>
+<body>
 
-# ── 추적 가이드 생성 ─────────────────────────────────────────────────────
-def generate_track_note(company, type_, title, summary):
-    text = title + ' ' + summary
-    if type_ == 'tender':
-        return "입찰 공고 확인. 나라장터 또는 재단 홈페이지에서 자격요건·마감일 즉시 확인 필요. KMA 입찰 참가 가능 여부 검토 후 신속 대응 요망."
-    if type_ == 'recruit':
-        if '연간' in text or '년도' in text or '2026' in text:
-            return f"연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. {company} 담당자 컨텍 유지 필요."
-        return f"{company} 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장."
-    if '협약' in text or '파트너십' in text or '위탁' in text:
-        return f"{company}가 외부 기관과 협약·위탁 계약 체결. 통상 1년 계약이므로 약 9~10개월 후 재계약 시점. 현 파트너 종료 전 KMA를 대안 파트너로 제안하는 타이밍 공략 필요."
-    return f"{company} 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능."
+<div class="header">
+  <span style="font-size:18px">📡</span>
+  <h1>CSR 공고 모니터링</h1>
+  <div class="scan-info">마지막 수집: <span id="lastScan">—</span></div>
+</div>
 
-def generate_track_when(type_, status):
-    if status == 'open':
-        return "지금 즉시 — 현재 모집/공고 진행 중"
-    if type_ == 'tender':
-        return "즉시 확인 — 입찰 마감일 체크"
-    if type_ == 'recruit':
-        return "약 10~12개월 후 — 다음 사업연도 모집 시점"
-    return "3~6개월 후 — 사업 기획 시점"
+<div class="stats">
+  <div class="stat red"><div class="n" id="sOpen">0</div><div class="l">모집 진행 중</div></div>
+  <div class="stat orange"><div class="n" id="sRecruit">0</div><div class="l">모집·공모 발견</div></div>
+  <div class="stat purple"><div class="n" id="sTrack">0</div><div class="l">추적 예정</div></div>
+  <div class="stat blue"><div class="n" id="sNews">0</div><div class="l">뉴스·소식</div></div>
+  <div class="stat green"><div class="n" id="sTotal">48</div><div class="l">모니터링 기업</div></div>
+</div>
 
-def make_id(company, title):
-    return hashlib.md5(f"{company}{title}".encode()).hexdigest()[:8]
+<div class="layout">
+  <div class="panel">
+    <div class="panel-head">
+      <span>📋</span><h2>수집된 공고 및 뉴스</h2>
+      <div class="count" id="feedCount">0건</div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="setTab('all',this)">전체</div>
+      <div class="tab" onclick="setTab('open',this)">🟢 모집 중</div>
+      <div class="tab" onclick="setTab('recruit',this)">📢 모집·공모</div>
+      <div class="tab" onclick="setTab('track',this)">🔮 추적 예정</div>
+      <div class="tab" onclick="setTab('news',this)">📰 뉴스</div>
+      <div class="tab" onclick="setTab('archive',this)">📦 아카이브</div>
+    </div>
+    <div class="news-list" id="newsFeed"></div>
+  </div>
 
-# ── 메인 ────────────────────────────────────────────────────────────────
-def run():
-    now = datetime.now()
-    print(f"[{now.strftime('%Y-%m-%d %H:%M')}] CSR 모니터링 시작")
+  <div class="panel">
+    <div class="panel-head"><span>🏢</span><h2>모니터링 기업</h2></div>
+    <div class="search-wrap">
+      <input class="search-input" id="companySearch" placeholder="기업명 검색..." oninput="renderCompanies()">
+    </div>
+    <div class="filter-row">
+      <button class="f-btn active" onclick="setCompanyFilter('all',this)">전체</button>
+      <button class="f-btn" onclick="setCompanyFilter('high',this)">⭐ 우선</button>
+      <button class="f-btn" onclick="setCompanyFilter('cond',this)">🔵 조건부</button>
+      <button class="f-btn" onclick="setCompanyFilter('news',this)">🔴 공고있음</button>
+    </div>
+    <div class="company-list" id="companyList"></div>
+  </div>
+</div>
 
-    # 기존 HTML에서 데이터 추출
-    with open('index.html', 'r', encoding='utf-8') as f:
-        html = f.read()
+<script>
+const COMPANIES = [
+  {name:"삼성전자",priority:"cond"},{name:"LG전자",priority:"cond"},
+  {name:"네이버 커넥트재단",priority:"cond"},{name:"카카오임팩트 재단",priority:"cond"},
+  {name:"국민은행",priority:"high"},{name:"우리은행",priority:"high"},
+  {name:"현대자동차그룹",priority:"high"},{name:"기아",priority:"cond"},
+  {name:"한국전력공사",priority:"cond"},{name:"아산나눔재단",priority:"cond"},
+  {name:"현대차 정몽구 재단",priority:"cond"},{name:"SK행복나눔재단",priority:"cond"},
+  {name:"KT그룹희망나눔재단",priority:"high"},{name:"포스코청암재단",priority:"cond"},
+  {name:"CJ나눔재단",priority:"high"},{name:"신한희망재단",priority:"high"},
+  {name:"교보교육재단",priority:"high"},{name:"하나금융그룹 / 하나금융나눔재단",priority:"high"},
+  {name:"IBK행복나눔재단",priority:"high"},{name:"iM사회공헌재단(DGB금융그룹)",priority:"high"},
+  {name:"NH농협은행",priority:"high"},{name:"신용카드사회공헌재단",priority:"high"},
+  {name:"KRX국민행복재단",priority:"high"},{name:"롯데장학재단",priority:"high"},
+  {name:"미래에셋박현주재단",priority:"high"},{name:"넥슨재단",priority:"cond"},
+  {name:"CJ올리브네트웍스",priority:"high"},{name:"롯데이노베이트",priority:"high"},
+  {name:"HD현대1%나눔재단 / HD현대",priority:"high"},{name:"GS칼텍스",priority:"high"},
+  {name:"LS그룹",priority:"high"},{name:"NC문화재단",priority:"cond"},
+  {name:"스마일게이트 희망스튜디오 / 퓨처랩",priority:"cond"},{name:"넷마블문화재단",priority:"cond"},
+  {name:"웹젠",priority:"cond"},{name:"KT&G장학재단",priority:"high"},
+  {name:"BNK금융그룹 / BNK부산은행",priority:"high"},{name:"신협사회공헌재단",priority:"high"},
+  {name:"새마을금고중앙회 / MG지역희망나눔재단",priority:"high"},{name:"한화그룹",priority:"cond"},
+  {name:"현대백화점사회복지재단",priority:"high"},{name:"이랜드재단 / 이랜드복지재단",priority:"high"},
+  {name:"메르세데스-벤츠 사회공헌위원회",priority:"cond"},{name:"BMW 코리아 미래재단",priority:"cond"},
+  {name:"폭스바겐그룹코리아 / Volkswagen Group WE: Foundation",priority:"cond"},
+];
 
-    old_findings = extract_js_array(html, 'FINDINGS', '// FINDINGS_START', '// FINDINGS_END')
-    existing_archive = extract_js_array(html, 'ARCHIVE', '// ARCHIVE_START', '// ARCHIVE_END')
-    print(f"기존 FINDINGS: {len(old_findings)}건, 아카이브: {len(existing_archive)}주")
+// FINDINGS_START
+const FINDINGS = [];
+// FINDINGS_END
 
-    # 7일 이상 된 항목 → 아카이브로 분리
-    cutoff = now - timedelta(days=7)
-    to_archive = []
-    current_findings = []
-    for item in old_findings:
-        try:
-            fd = datetime.strptime(item['date'], '%Y-%m-%d')
-            if fd < cutoff:
-                to_archive.append(item)
-            else:
-                current_findings.append(item)
-        except Exception:
-            current_findings.append(item)
-    print(f"아카이브 이동: {len(to_archive)}건, 유지: {len(current_findings)}건")
+// ARCHIVE_START
+const ARCHIVE = [];
+// ARCHIVE_END
 
-    # 기존 아카이브 ID 수집 (중복 방지)
-    existing_ids = set()
-    for week_entry in existing_archive:
-        for item in week_entry.get('items', []):
-            existing_ids.add(item.get('id', ''))
+let currentTab = 'all', companyFilter = 'all';
 
-    # 새 아카이브 항목 주간 그룹화 후 병합
-    week_groups = {}
-    for item in to_archive:
-        if item.get('id') in existing_ids:
-            continue
-        week = get_week_range(item['date'])
-        week_groups.setdefault(week, []).append(item)
+function setTab(t, el) {
+  currentTab = t;
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderFeed();
+}
 
-    new_archive = list(existing_archive)
-    for week, items in week_groups.items():
-        existing_week = next((w for w in new_archive if w['week'] == week), None)
-        if existing_week:
-            existing_week['items'].extend(items)
-        else:
-            new_archive.append({'week': week, 'items': items})
+function setCompanyFilter(f, el) {
+  companyFilter = f;
+  document.querySelectorAll('.f-btn').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderCompanies();
+}
 
-    # 날짜 역순 정렬, 최대 26주(약 6개월) 보관
-    new_archive.sort(key=lambda x: x['week'], reverse=True)
-    new_archive = new_archive[:26]
+function statusBadge(item) {
+  if (item.status === 'open') return '<span class="badge badge-open">🟢 모집 중</span>';
+  if (item.status === 'closed') return '<span class="badge badge-closed">🔴 마감</span>';
+  return '';
+}
 
-    # 새 뉴스 수집
-    seen_ids = set(f.get('id') for f in current_findings)
-    new_findings = []
+function typeBadge(type) {
+  if (type === 'recruit') return '<span class="badge badge-recruit">📢 모집·공모</span>';
+  if (type === 'tender') return '<span class="badge badge-tender">📑 입찰</span>';
+  return '<span class="badge badge-news">📰 뉴스</span>';
+}
 
-    # 우선순위 기업 개별 검색
-    for company in [c for c in COMPANIES if c['priority'] == 'high']:
-        for kw in COMPANY_KEYWORDS:
-            query = f"{company['name']} {kw}"
-            print(f"  검색: {query[:45]}")
-            results = fetch_google_news(query, days=45, max_results=3)
-            for r in results:
-                fid = make_id(company['name'], r['title'])
-                if fid in seen_ids:
-                    continue
-                seen_ids.add(fid)
-                t = classify_type(r['title'], r['summary'])
-                s = classify_status(r['title'], r['summary'], r['date'])
-                new_findings.append({
-                    'id': fid,
-                    'company': company['name'],
-                    'type': t, 'status': s,
-                    'title': r['title'], 'summary': r['summary'],
-                    'date': r['date'], 'deadline': None, 'url': r['url'],
-                    'isNew': True,
-                    'trackNote': generate_track_note(company['name'], t, r['title'], r['summary']),
-                    'trackWhen': generate_track_when(t, s),
-                })
-            time.sleep(0.5)
+function renderItem(f) {
+  return `<div class="news-item">
+    <div class="news-badges">${typeBadge(f.type)}${statusBadge(f)}</div>
+    <div class="news-company">${f.isNew ? '<span class="new-dot"></span>' : ''}${f.company}</div>
+    <div class="news-title">${f.title}</div>
+    <div class="news-summary">${f.summary}</div>
+    ${f.trackNote ? `<div class="track-box">
+      <div class="track-label">🔮 추적 가이드</div>
+      <div class="track-text">${f.trackNote}</div>
+      ${f.trackWhen ? `<div class="track-when">⏰ ${f.trackWhen}</div>` : ''}
+    </div>` : ''}
+    <div class="news-meta">
+      <span class="news-date">수집: ${f.date}</span>
+      ${f.deadline ? (f.status === 'open'
+        ? `<span class="deadline-open">마감 ${f.deadline}</span>`
+        : `<span class="deadline-closed">마감 ${f.deadline}</span>`) : ''}
+      ${f.url ? `<a class="news-link" href="${f.url}" target="_blank">🔗 원문</a>` : ''}
+    </div>
+  </div>`;
+}
 
-    # 조건부 기업 통합 검색
-    for company in [c for c in COMPANIES if c['priority'] == 'cond']:
-        query = f"{company['name']} 사회공헌 교육 모집 2026"
-        results = fetch_google_news(query, days=30, max_results=2)
-        for r in results:
-            fid = make_id(company['name'], r['title'])
-            if fid in seen_ids:
-                continue
-            seen_ids.add(fid)
-            t = classify_type(r['title'], r['summary'])
-            s = classify_status(r['title'], r['summary'], r['date'])
-            new_findings.append({
-                'id': fid, 'company': company['name'],
-                'type': t, 'status': s,
-                'title': r['title'], 'summary': r['summary'],
-                'date': r['date'], 'deadline': None, 'url': r['url'],
-                'isNew': True,
-                'trackNote': generate_track_note(company['name'], t, r['title'], r['summary']),
-                'trackWhen': generate_track_when(t, s),
-            })
-        time.sleep(0.5)
+function renderFeed() {
+  const feed = document.getElementById('newsFeed');
 
-    # 통합 키워드 검색
-    company_names = [c['name'] for c in COMPANIES]
-    for query in GENERAL_KEYWORDS:
-        print(f"  통합 검색: {query[:45]}")
-        results = fetch_google_news(query, days=14, max_results=5)
-        for r in results:
-            matched = next((n for n in company_names if n.split('/')[0].strip() in r['title'] + r['summary']), None)
-            if not matched:
-                continue
-            fid = make_id(matched, r['title'])
-            if fid in seen_ids:
-                continue
-            seen_ids.add(fid)
-            t = classify_type(r['title'], r['summary'])
-            s = classify_status(r['title'], r['summary'], r['date'])
-            new_findings.append({
-                'id': fid, 'company': matched,
-                'type': t, 'status': s,
-                'title': r['title'], 'summary': r['summary'],
-                'date': r['date'], 'deadline': None, 'url': r['url'],
-                'isNew': True,
-                'trackNote': generate_track_note(matched, t, r['title'], r['summary']),
-                'trackWhen': generate_track_when(t, s),
-            })
-        time.sleep(0.5)
+  if (currentTab === 'archive') {
+    if (!ARCHIVE.length) {
+      feed.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>아직 아카이브된 기록이 없습니다.<br>7일이 지난 뉴스가 자동으로 여기 쌓입니다.</p></div>';
+      document.getElementById('feedCount').textContent = '0건';
+      return;
+    }
+    const total = ARCHIVE.reduce((s, w) => s + w.items.length, 0);
+    document.getElementById('feedCount').textContent = total + '건';
+    feed.innerHTML = ARCHIVE.map(week => `
+      <div class="archive-week">
+        <div class="archive-week-header" onclick="toggleWeek(this)">
+          📅 ${week.week}
+          <span class="week-count">${week.items.length}건</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="archive-week-body" style="display:none">
+          ${week.items.map(f => renderItem(f)).join('')}
+        </div>
+      </div>`).join('');
+    return;
+  }
 
-    # 병합 및 정렬 (open 먼저, 최신순)
-    all_findings = current_findings + new_findings
-    all_findings.sort(key=lambda x: (0 if x['status'] == 'open' else 1, x['date']), reverse=True)
-    # open은 위로, 같은 status 내 최신순이 되도록 재정렬
-    open_items = sorted([f for f in all_findings if f['status'] == 'open'], key=lambda x: x['date'], reverse=True)
-    other_items = sorted([f for f in all_findings if f['status'] != 'open'], key=lambda x: x['date'], reverse=True)
-    all_findings = (open_items + other_items)[:60]
+  let data = [...FINDINGS];
+  if (currentTab === 'open')    data = data.filter(f => f.status === 'open');
+  if (currentTab === 'recruit') data = data.filter(f => f.type === 'recruit');
+  if (currentTab === 'track')   data = data.filter(f => f.trackNote);
+  if (currentTab === 'news')    data = data.filter(f => f.type === 'news');
+  data.sort((a, b) => ({open:0,closed:1,news:2}[a.status]||2) - ({open:0,closed:1,news:2}[b.status]||2));
 
-    print(f"\n수집 완료: FINDINGS {len(all_findings)}건, 아카이브 {sum(len(w['items']) for w in new_archive)}건")
+  document.getElementById('feedCount').textContent = data.length + '건';
+  if (!data.length) {
+    feed.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>수집된 공고가 없습니다.<br>매일 오전 9시 자동 스캔됩니다.</p></div>';
+    return;
+  }
+  feed.innerHTML = data.map(f => renderItem(f)).join('');
+}
 
-    # index.html 업데이트
-    findings_json = json.dumps(all_findings, ensure_ascii=False, indent=2)
-    new_findings_block = (
-        f"// FINDINGS_START\n"
-        f"// AUTO-UPDATED: {now.strftime('%Y-%m-%d %H:%M KST')}\n"
-        f"const FINDINGS = {findings_json};\n"
-        f"// FINDINGS_END"
-    )
+function toggleWeek(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.toggle-icon');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  icon.textContent = isOpen ? '▶' : '▼';
+}
 
-    archive_json = json.dumps(new_archive, ensure_ascii=False, indent=2)
-    new_archive_block = (
-        f"// ARCHIVE_START\n"
-        f"const ARCHIVE = {archive_json};\n"
-        f"// ARCHIVE_END"
-    )
+function renderCompanies() {
+  const q = document.getElementById('companySearch').value.trim();
+  const withNews = new Set(FINDINGS.map(f => f.company));
+  let list = [...COMPANIES];
+  if (q) list = list.filter(c => c.name.includes(q));
+  if (companyFilter === 'high') list = list.filter(c => c.priority === 'high');
+  if (companyFilter === 'cond') list = list.filter(c => c.priority === 'cond');
+  if (companyFilter === 'news') list = list.filter(c => withNews.has(c.name));
+  list.sort((a, b) => (withNews.has(a.name) ? 0 : 1) - (withNews.has(b.name) ? 0 : 1));
+  document.getElementById('companyList').innerHTML = list.map(c => {
+    const cnt = FINDINGS.filter(f => f.company === c.name).length;
+    const dot = c.priority === 'high' ? 'p-high' : c.priority === 'cond' ? 'p-cond' : 'p-low';
+    return `<div class="company-row ${cnt ? 'has-news' : ''}" onclick="filterByCompany('${c.name.replace(/'/g,"\\'")}')">
+      <div class="priority-dot ${dot}"></div>
+      <div class="company-name-text" title="${c.name}">${c.name}</div>
+      ${cnt ? `<div class="company-news-count">${cnt}</div>` : ''}
+    </div>`;
+  }).join('');
+}
 
-    html = re.sub(r'// FINDINGS_START[\s\S]*?// FINDINGS_END', new_findings_block, html)
-    html = re.sub(r'// ARCHIVE_START[\s\S]*?// ARCHIVE_END', new_archive_block, html)
+function filterByCompany(name) {
+  const data = FINDINGS.filter(f => f.company === name);
+  if (!data.length) return;
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+  document.getElementById('feedCount').textContent = data.length + '건';
+  document.getElementById('newsFeed').innerHTML = data.map(f => renderItem(f)).join('');
+}
 
-    with open('index.html', 'w', encoding='utf-8') as f:
-        f.write(html)
+function updateStats() {
+  document.getElementById('sOpen').textContent = FINDINGS.filter(f => f.status === 'open').length;
+  document.getElementById('sRecruit').textContent = FINDINGS.filter(f => f.type === 'recruit').length;
+  document.getElementById('sTrack').textContent = FINDINGS.filter(f => f.trackNote).length;
+  document.getElementById('sNews').textContent = FINDINGS.filter(f => f.type === 'news').length;
+  const dates = FINDINGS.map(f => f.date).filter(Boolean).sort();
+  document.getElementById('lastScan').textContent = dates.length ? dates[dates.length - 1] : '아직 없음';
+}
 
-    print("index.html 업데이트 완료 ✓")
-
-if __name__ == '__main__':
-    run()
+updateStats(); renderFeed(); renderCompanies();
+</script>
+</body>
+</html>
