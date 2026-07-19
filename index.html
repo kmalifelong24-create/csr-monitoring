@@ -1,1168 +1,341 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CSR 공고 모니터링</title>
-<style>
-  :root { color-scheme: light; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f6fb; color: #1a1a2e; font-size: 14px; }
+"""
+CSR 공고 모니터링 — 자동 업데이트 스크립트
+매일 GitHub Actions로 실행되어 뉴스를 수집하고 index.html을 갱신합니다.
+- 7일 이내 항목: FINDINGS (메인 피드)
+- 7일 이상 항목: ARCHIVE (주간 그룹화, 최대 26주 보관)
+"""
 
-  .header { background: #fff; border-bottom: 1px solid #e5e8f0; padding: 14px 24px; display: flex; align-items: center; gap: 10px; }
-  .header h1 { font-size: 16px; font-weight: 700; }
-  .header .scan-info { margin-left: auto; font-size: 12px; color: #aaa; }
-  .header .scan-info span { color: #3b82f6; font-weight: 600; }
+import feedparser
+import json
+import re
+import urllib.parse
+from datetime import datetime, timedelta
+import hashlib
+import time
 
-  .stats { display: flex; gap: 10px; padding: 16px 24px 0; }
-  .stat { background: #fff; border-radius: 10px; padding: 14px 20px; flex: 1; border: 1px solid #e5e8f0; }
-  .stat .n { font-size: 26px; font-weight: 800; line-height: 1; }
-  .stat .l { font-size: 11px; color: #888; margin-top: 3px; }
-  .stat.red .n { color: #ef4444; }
-  .stat.orange .n { color: #f59e0b; }
-  .stat.blue .n { color: #3b82f6; }
-  .stat.purple .n { color: #8b5cf6; }
-  .stat.green .n { color: #22c55e; }
+# ── 모니터링 대상 기업 ──────────────────────────────────────────────────
+COMPANIES = [
+    {"name": "국민은행", "priority": "high"},
+    {"name": "우리은행", "priority": "high"},
+    {"name": "현대자동차그룹", "priority": "high"},
+    {"name": "KT그룹희망나눔재단", "priority": "high"},
+    {"name": "CJ나눔재단", "priority": "high"},
+    {"name": "신한희망재단", "priority": "high"},
+    {"name": "교보교육재단", "priority": "high"},
+    {"name": "하나금융그룹", "priority": "high"},
+    {"name": "IBK행복나눔재단", "priority": "high"},
+    {"name": "iM사회공헌재단", "priority": "high"},
+    {"name": "NH농협은행", "priority": "high"},
+    {"name": "신용카드사회공헌재단", "priority": "high"},
+    {"name": "KRX국민행복재단", "priority": "high"},
+    {"name": "롯데장학재단", "priority": "high"},
+    {"name": "미래에셋박현주재단", "priority": "high"},
+    {"name": "CJ올리브네트웍스", "priority": "high"},
+    {"name": "롯데이노베이트", "priority": "high"},
+    {"name": "HD현대1%나눔재단", "priority": "high"},
+    {"name": "GS칼텍스", "priority": "high"},
+    {"name": "LS그룹", "priority": "high"},
+    {"name": "KT&G장학재단", "priority": "high"},
+    {"name": "BNK금융그룹", "priority": "high"},
+    {"name": "신협사회공헌재단", "priority": "high"},
+    {"name": "새마을금고중앙회", "priority": "high"},
+    {"name": "현대백화점사회복지재단", "priority": "high"},
+    {"name": "이랜드재단", "priority": "high"},
+    {"name": "삼성전자", "priority": "cond"},
+    {"name": "LG전자", "priority": "cond"},
+    {"name": "네이버 커넥트재단", "priority": "cond"},
+    {"name": "카카오임팩트재단", "priority": "cond"},
+    {"name": "넥슨재단", "priority": "cond"},
+    {"name": "NC문화재단", "priority": "cond"},
+    {"name": "스마일게이트 희망스튜디오", "priority": "cond"},
+    {"name": "넷마블문화재단", "priority": "cond"},
+    {"name": "한화그룹", "priority": "cond"},
+    {"name": "SK행복나눔재단", "priority": "cond"},
+    {"name": "포스코청암재단", "priority": "cond"},
+    {"name": "아산나눔재단", "priority": "cond"},
+    {"name": "현대차 정몽구 재단", "priority": "cond"},
+    {"name": "BMW 코리아 미래재단", "priority": "cond"},
+    {"name": "메르세데스-벤츠 사회공헌위원회", "priority": "cond"},
+]
 
-  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 16px 24px 24px; }
+# ── 검색 키워드 ──────────────────────────────────────────────────────────
+COMPANY_KEYWORDS = [
+    "사회공헌 운영기관 모집",
+    "사회공헌 수행기관 공모",
+    "교육 협력기관 모집",
+]
 
-  .panel { background: #fff; border-radius: 10px; border: 1px solid #e5e8f0; overflow: hidden; }
-  .panel-head { padding: 12px 16px; border-bottom: 1px solid #f0f2f8; display: flex; align-items: center; gap: 8px; }
-  .panel-head h2 { font-size: 13px; font-weight: 700; }
-  .panel-head .count { margin-left: auto; font-size: 11px; background: #f0f4ff; color: #3b82f6; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+GENERAL_KEYWORDS = [
+    "기업재단 교육 운영기관 모집 2026",
+    "사회공헌 수행기관 공모 2026",
+    "취약계층 교육 협력기관 모집",
+    "청소년 교육 위탁운영 공모 기업재단",
+    "ESG 교육사업 운영기관 모집",
+]
 
-  .tabs { display: flex; padding: 0 16px; border-bottom: 1px solid #f0f2f8; }
-  .tab { padding: 10px 14px; font-size: 12px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; white-space: nowrap; }
-  .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 700; }
+# ── 헬퍼: 주간 범위 ────────────────────────────────────────────────────
+def get_week_range(date_str):
+    """날짜의 주간 범위 반환 (월~일요일)"""
+    try:
+        d = datetime.strptime(date_str, '%Y-%m-%d')
+        monday = d - timedelta(days=d.weekday())
+        sunday = monday + timedelta(days=6)
+        return f"{monday.strftime('%Y-%m-%d')} ~ {sunday.strftime('%Y-%m-%d')}"
+    except Exception:
+        return "날짜 미상"
 
-  /* NEWS ITEMS */
-  .news-list { max-height: 560px; overflow-y: auto; }
-  .news-item { padding: 14px 16px; border-bottom: 1px solid #f5f6fa; }
-  .news-item:last-child { border-bottom: none; }
-  .news-item:hover { background: #fafbff; }
+# ── 헬퍼: HTML에서 JS 배열 추출 ───────────────────────────────────────
+def extract_js_array(html, var_name, start_marker, end_marker):
+    """HTML 마커 사이에서 const VAR = [...] 추출"""
+    block = re.search(
+        rf'{re.escape(start_marker)}[\s\S]*?{re.escape(end_marker)}', html
+    )
+    if not block:
+        return []
+    arr = re.search(rf'const {var_name} = (\[[\s\S]*?\]);', block.group(0))
+    if arr:
+        try:
+            return json.loads(arr.group(1))
+        except Exception:
+            return []
+    return []
 
-  .news-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
-  .news-badges { display: flex; gap: 5px; flex-wrap: wrap; flex-shrink: 0; margin-top: 1px; }
-  .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
-  .badge-recruit { background: #fef3c7; color: #b45309; }
-  .badge-news    { background: #e0f2fe; color: #0369a1; }
-  .badge-tender  { background: #fce7f3; color: #9d174d; }
-  .badge-open    { background: #dcfce7; color: #166534; }
-  .badge-closed  { background: #fee2e2; color: #991b1b; }
-  .badge-track   { background: #ede9fe; color: #6d28d9; }
+# ── 뉴스 수집 ────────────────────────────────────────────────────────────
+def fetch_google_news(query, days=30, max_results=5):
+    encoded = urllib.parse.quote(query)
+    url = f"https://news.google.com/rss/search?q={encoded}&hl=ko&gl=KR&ceid=KR:ko"
+    try:
+        feed = feedparser.parse(url)
+        cutoff = datetime.now() - timedelta(days=days)
+        results = []
+        for entry in feed.entries[:max_results]:
+            try:
+                pub = datetime(*entry.published_parsed[:6])
+                if pub < cutoff:
+                    continue
+                title = re.sub(r'\s*-\s*[^-]+$', '', entry.title).strip()
+                summary = re.sub('<[^>]+>', '', entry.get('summary', ''))[:250]
+                results.append({
+                    'title': title,
+                    'url': entry.link,
+                    'date': pub.strftime('%Y-%m-%d'),
+                    'summary': summary,
+                })
+            except Exception:
+                continue
+        return results
+    except Exception as e:
+        print(f"  검색 오류 ({query[:30]}...): {e}")
+        return []
 
-  .news-body { flex: 1; min-width: 0; }
-  .news-company { font-size: 11px; font-weight: 700; color: #3b82f6; margin-bottom: 3px; }
-  .news-title { font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 5px; line-height: 1.4; }
-  .news-summary { font-size: 12px; color: #4b5563; line-height: 1.6; margin-bottom: 8px; }
+# ── 분류 ────────────────────────────────────────────────────────────────
+def classify_type(title, summary):
+    text = title + ' ' + summary
+    if any(w in text for w in ['입찰', '낙찰', '나라장터', '용역 공고']):
+        return 'tender'
+    if any(w in text for w in ['모집', '공모', '수행기관', '운영기관', '협력기관', '신청 접수', '참여기관']):
+        return 'recruit'
+    return 'news'
 
-  /* TRACK BOX — 핵심 추가 */
-  .track-box { background: #faf7ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; }
-  .track-box .track-label { font-size: 10px; font-weight: 800; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-  .track-box .track-text { font-size: 12px; color: #374151; line-height: 1.5; }
-  .track-box .track-when { display: inline-block; margin-top: 5px; font-size: 11px; font-weight: 700; color: #7c3aed; background: #ede9fe; padding: 2px 8px; border-radius: 4px; }
+def classify_status(title, summary, date_str):
+    text = title + ' ' + summary
+    if any(w in text for w in ['종료', '마감됨', '선정 완료', '완료']):
+        return 'closed'
+    pub_date = datetime.strptime(date_str, '%Y-%m-%d')
+    age_days = (datetime.now() - pub_date).days
+    if age_days <= 14:
+        return 'open'
+    return 'closed'
 
-  .news-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .news-date { font-size: 11px; color: #aaa; }
-  .news-link { font-size: 11px; color: #3b82f6; text-decoration: none; }
-  .news-link:hover { text-decoration: underline; }
-  .deadline-open { font-size: 11px; background: #dcfce7; color: #166534; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
-  .deadline-closed { font-size: 11px; background: #f1f5f9; color: #94a3b8; padding: 2px 7px; border-radius: 4px; font-weight: 600; text-decoration: line-through; }
+# ── 추적 가이드 생성 ─────────────────────────────────────────────────────
+def generate_track_note(company, type_, title, summary):
+    text = title + ' ' + summary
+    if type_ == 'tender':
+        return "입찰 공고 확인. 나라장터 또는 재단 홈페이지에서 자격요건·마감일 즉시 확인 필요. KMA 입찰 참가 가능 여부 검토 후 신속 대응 요망."
+    if type_ == 'recruit':
+        if '연간' in text or '년도' in text or '2026' in text:
+            return f"연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. {company} 담당자 컨텍 유지 필요."
+        return f"{company} 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장."
+    if '협약' in text or '파트너십' in text or '위탁' in text:
+        return f"{company}가 외부 기관과 협약·위탁 계약 체결. 통상 1년 계약이므로 약 9~10개월 후 재계약 시점. 현 파트너 종료 전 KMA를 대안 파트너로 제안하는 타이밍 공략 필요."
+    return f"{company} 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능."
 
-  .empty-state { padding: 48px 24px; text-align: center; color: #bbb; }
-  .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
-  .empty-state p { font-size: 13px; line-height: 1.6; }
+def generate_track_when(type_, status):
+    if status == 'open':
+        return "지금 즉시 — 현재 모집/공고 진행 중"
+    if type_ == 'tender':
+        return "즉시 확인 — 입찰 마감일 체크"
+    if type_ == 'recruit':
+        return "약 10~12개월 후 — 다음 사업연도 모집 시점"
+    return "3~6개월 후 — 사업 기획 시점"
 
-  .new-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ef4444; margin-right: 5px; vertical-align: middle; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+def make_id(company, title):
+    return hashlib.md5(f"{company}{title}".encode()).hexdigest()[:8]
 
-  /* COMPANY LIST */
-  .company-list { max-height: 620px; overflow-y: auto; }
-  .company-row { padding: 10px 14px; border-bottom: 1px solid #f5f6fa; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-  .company-row:last-child { border-bottom: none; }
-  .company-row:hover { background: #fafbff; }
-  .company-row.has-news { background: #fffbf0; }
-  .company-name-text { font-size: 12px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .company-news-count { font-size: 10px; background: #ef4444; color: #fff; padding: 1px 6px; border-radius: 10px; font-weight: 700; flex-shrink: 0; }
-  .priority-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .p-high { background: #f59e0b; }
-  .p-cond { background: #3b82f6; }
-  .p-low  { background: #d1d5db; }
+# ── 메인 ────────────────────────────────────────────────────────────────
+def run():
+    now = datetime.now()
+    print(f"[{now.strftime('%Y-%m-%d %H:%M')}] CSR 모니터링 시작")
 
-  .filter-row { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #f0f2f8; flex-wrap: wrap; }
-  .f-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid #e5e8f0; background: #fff; font-size: 11px; cursor: pointer; color: #666; }
-  .f-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 600; }
+    # 기존 HTML에서 데이터 추출
+    with open('index.html', 'r', encoding='utf-8') as f:
+        html = f.read()
 
-  .search-wrap { padding: 10px 14px; border-bottom: 1px solid #f0f2f8; }
-  .search-input { width: 100%; padding: 7px 10px; border: 1px solid #e5e8f0; border-radius: 7px; font-size: 12px; outline: none; }
-  .search-input:focus { border-color: #3b82f6; }
-</style>
-</head>
-<body>
+    old_findings = extract_js_array(html, 'FINDINGS', '// FINDINGS_START', '// FINDINGS_END')
+    existing_archive = extract_js_array(html, 'ARCHIVE', '// ARCHIVE_START', '// ARCHIVE_END')
+    print(f"기존 FINDINGS: {len(old_findings)}건, 아카이브: {len(existing_archive)}주")
 
-<div class="header">
-  <span style="font-size:18px">📡</span>
-  <h1>CSR 공고 모니터링</h1>
-  <div class="scan-info">마지막 스캔: <span id="lastScan">—</span></div>
-</div>
+    # 7일 이상 된 항목 → 아카이브로 분리
+    cutoff = now - timedelta(days=7)
+    to_archive = []
+    current_findings = []
+    for item in old_findings:
+        try:
+            fd = datetime.strptime(item['date'], '%Y-%m-%d')
+            if fd < cutoff:
+                to_archive.append(item)
+            else:
+                current_findings.append(item)
+        except Exception:
+            current_findings.append(item)
+    print(f"아카이브 이동: {len(to_archive)}건, 유지: {len(current_findings)}건")
 
-<div class="stats">
-  <div class="stat red">  <div class="n" id="sOpen">0</div>  <div class="l">모집 진행 중</div></div>
-  <div class="stat orange"><div class="n" id="sRecruit">0</div><div class="l">모집·공모 발견</div></div>
-  <div class="stat purple"><div class="n" id="sTrack">0</div> <div class="l">추적 예정</div></div>
-  <div class="stat blue">  <div class="n" id="sNews">0</div>  <div class="l">뉴스·소식</div></div>
-  <div class="stat green"> <div class="n" id="sTotal">48</div> <div class="l">모니터링 기업</div></div>
-</div>
+    # 기존 아카이브 ID 수집 (중복 방지)
+    existing_ids = set()
+    for week_entry in existing_archive:
+        for item in week_entry.get('items', []):
+            existing_ids.add(item.get('id', ''))
 
-<div class="layout">
-  <div>
-    <div class="panel">
-      <div class="panel-head">
-        <span>📋</span>
-        <h2>수집된 공고 및 뉴스</h2>
-        <div class="count" id="feedCount">0건</div>
-      </div>
-      <div class="tabs">
-        <div class="tab active" onclick="setTab('all',this)">전체</div>
-        <div class="tab" onclick="setTab('open',this)">🟢 모집 중</div>
-        <div class="tab" onclick="setTab('recruit',this)">📢 모집·공모</div>
-        <div class="tab" onclick="setTab('track',this)">🔮 추적 예정</div>
-        <div class="tab" onclick="setTab('news',this)">📰 뉴스</div>
-      </div>
-      <div class="news-list" id="newsFeed">
-        <div class="empty-state"><div class="icon">🔍</div><p>수집된 공고가 없습니다.</p></div>
-      </div>
-    </div>
-  </div>
+    # 새 아카이브 항목 주간 그룹화 후 병합
+    week_groups = {}
+    for item in to_archive:
+        if item.get('id') in existing_ids:
+            continue
+        week = get_week_range(item['date'])
+        week_groups.setdefault(week, []).append(item)
 
-  <div>
-    <div class="panel">
-      <div class="panel-head"><span>🏢</span><h2>모니터링 기업</h2></div>
-      <div class="search-wrap">
-        <input class="search-input" id="companySearch" placeholder="기업명 검색..." oninput="renderCompanies()">
-      </div>
-      <div class="filter-row">
-        <button class="f-btn active" onclick="setCompanyFilter('all',this)">전체</button>
-        <button class="f-btn" onclick="setCompanyFilter('high',this)">⭐ 우선</button>
-        <button class="f-btn" onclick="setCompanyFilter('cond',this)">🔵 조건부</button>
-        <button class="f-btn" onclick="setCompanyFilter('news',this)">🔴 공고있음</button>
-      </div>
-      <div class="company-list" id="companyList"></div>
-    </div>
-  </div>
-</div>
+    new_archive = list(existing_archive)
+    for week, items in week_groups.items():
+        existing_week = next((w for w in new_archive if w['week'] == week), None)
+        if existing_week:
+            existing_week['items'].extend(items)
+        else:
+            new_archive.append({'week': week, 'items': items})
 
-<script>
-const COMPANIES = [
-  {name:"삼성전자",priority:"cond"},{name:"LG전자",priority:"cond"},
-  {name:"네이버 커넥트재단",priority:"cond"},{name:"카카오임팩트 재단",priority:"cond"},
-  {name:"국민은행",priority:"high"},{name:"우리은행",priority:"high"},
-  {name:"현대자동차그룹",priority:"high"},{name:"기아",priority:"cond"},
-  {name:"한국전력공사",priority:"cond"},{name:"한국가스공사",priority:"low"},
-  {name:"아산나눔재단",priority:"cond"},{name:"현대차 정몽구 재단",priority:"cond"},
-  {name:"SK행복나눔재단",priority:"cond"},{name:"KT그룹희망나눔재단",priority:"high"},
-  {name:"포스코청암재단",priority:"cond"},{name:"CJ나눔재단",priority:"high"},
-  {name:"신한희망재단",priority:"high"},{name:"교보교육재단",priority:"high"},
-  {name:"하나금융그룹 / 하나금융나눔재단",priority:"high"},{name:"IBK행복나눔재단",priority:"high"},
-  {name:"iM사회공헌재단(DGB금융그룹)",priority:"high"},{name:"NH농협은행",priority:"high"},
-  {name:"신용카드사회공헌재단",priority:"high"},{name:"KRX국민행복재단",priority:"high"},
-  {name:"롯데장학재단",priority:"high"},{name:"미래에셋박현주재단",priority:"high"},
-  {name:"넥슨재단",priority:"cond"},{name:"CJ올리브네트웍스",priority:"high"},
-  {name:"롯데이노베이트",priority:"high"},{name:"HD현대1%나눔재단 / HD현대",priority:"high"},
-  {name:"GS칼텍스",priority:"high"},{name:"LS그룹",priority:"high"},
-  {name:"NC문화재단",priority:"cond"},{name:"스마일게이트 희망스튜디오 / 퓨처랩",priority:"cond"},
-  {name:"넷마블문화재단",priority:"cond"},{name:"웹젠",priority:"cond"},
-  {name:"KT&G장학재단",priority:"high"},{name:"BNK금융그룹 / BNK부산은행",priority:"high"},
-  {name:"신협사회공헌재단",priority:"high"},{name:"새마을금고중앙회 / MG지역희망나눔재단",priority:"high"},
-  {name:"두산연강재단",priority:"low"},{name:"유한재단",priority:"low"},
-  {name:"한화그룹",priority:"cond"},{name:"현대백화점사회복지재단",priority:"high"},
-  {name:"이랜드재단 / 이랜드복지재단",priority:"high"},
-  {name:"메르세데스-벤츠 사회공헌위원회",priority:"cond"},
-  {name:"BMW 코리아 미래재단",priority:"cond"},
-  {name:"폭스바겐그룹코리아 / Volkswagen Group WE: Foundation",priority:"cond"},
-];
+    # 날짜 역순 정렬, 최대 26주(약 6개월) 보관
+    new_archive.sort(key=lambda x: x['week'], reverse=True)
+    new_archive = new_archive[:26]
 
-// status: "open" | "closed" | "news"
-// trackNote: 다음 모집 예측 & 액션 가이드
-// FINDINGS_START
-// AUTO-UPDATED: 2026-07-17 01:49 KST
-const FINDINGS = [
-  {
-    "id": "501d4a8c",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "의정부시, NH농협은행 의정부시지부 '치매극복선도기업' 지정",
-    "summary": "의정부시, NH농협은행 의정부시지부 '치매극복선도기업' 지정&nbsp;&nbsp;경기헤드라인",
-    "date": "2026-07-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTFA0WmVzYTNUZDM4MFozaDBzSkFCZ05xWDRraHUwbkJxM21ZMEVVMl95bmh3U2ZaS3M2SDNlLUNrZnVWWHlPUWhhTjB1RFQ0NHowSG5teE1mYlFUVzRBamZzbWtzakJYUQ?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "120e6629",
-    "company": "새마을금고중앙회",
-    "type": "news",
-    "status": "open",
-    "title": "새마을금고, 사회연대경제조직과 지역문제 해결…주거환경 개선부터 지역축제까지",
-    "summary": "새마을금고, 사회연대경제조직과 지역문제 해결…주거환경 개선부터 지역축제까지&nbsp;&nbsp;라이센스뉴스",
-    "date": "2026-07-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE5Rb2o3aTZOWWRBaE1jbWhQLWNCOHNfY2dNeUFrN0RvVUduc1FNcUsxbGtsNzlWbm1rRVJMUWFYcmF1b2ZnMG5JRzVLWnhUbjBYS2M4YnBuZE56RmZQY09sLXZNd3JkV2tsaHJJ?oc=5",
-    "isNew": true,
-    "trackNote": "새마을금고중앙회 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "c6569e70",
-    "company": "iM사회공헌재단",
-    "type": "news",
-    "status": "open",
-    "title": "안전한 대구시, 시민참여형 범죄예방 프로그램 본격 추진",
-    "summary": "안전한 대구시, 시민참여형 범죄예방 프로그램 본격 추진&nbsp;&nbsp;저널25방송",
-    "date": "2026-07-06",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE04WUh5MmlwRUpLUlJtbzdRNXJDaFZ5MndCOXNYNkN5WElBVUZkdzg1NW1NcV9ESFV2eTNkWWZsV2pnWEoyZWx5cm50V1lXaW5xMHJLUVhqTXJsQXgzYU84UVJoVlJ5TDNyZGxTdg?oc=5",
-    "isNew": true,
-    "trackNote": "iM사회공헌재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "a0aa483d",
-    "company": "HD현대1%나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "영암군·HD현대 1%나눔재단, ‘행복한끼’제10호점 개소",
-    "summary": "영암군·HD현대 1%나눔재단, ‘행복한끼’제10호점 개소&nbsp;&nbsp;일등방송",
-    "date": "2026-07-06",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiREFVX3lxTE9LTGRrRlRxUFpXMTY0bjlxenR2b0xiZ1NVMTNQNy1tbmx0bmVlNnh1dVZmbkVtNURkUDZsTHVFVXdId0tS?oc=5",
-    "isNew": true,
-    "trackNote": "HD현대1%나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "c029e8a3",
-    "company": "HD현대1%나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "영암군, 주민이 만드는 예산 주민참여예산학교 운영",
-    "summary": "영암군, 주민이 만드는 예산 주민참여예산학교 운영&nbsp;&nbsp;일등방송",
-    "date": "2026-07-06",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiREFVX3lxTFBCTEk5eTE1X3NOOTFMdDNVcVNtWEY5YlU4V1VuMXZpLTZwRDJ5R3lYRVpsOXdDZng5NS1TenlpYzhWTExG?oc=5",
-    "isNew": true,
-    "trackNote": "HD현대1%나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4e320ec4",
-    "company": "현대차 정몽구 재단",
-    "type": "news",
-    "status": "open",
-    "title": "현대차 정몽구 재단 ‘혁신리더 아카데미’ 출범…“AI로 사회복지 혁신”",
-    "summary": "현대차 정몽구 재단 ‘혁신리더 아카데미’ 출범…“AI로 사회복지 혁신”&nbsp;&nbsp;v.daum.net",
-    "date": "2026-07-06",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiRkFVX3lxTFBGaU9oS3NjcHpnc1drM3JINFI4WV8yUzlCTGR5dWRlUVBKaVNMWkdyclFENHltMWNsS1o4SE4yb0Y1N09MQ0E?oc=5",
-    "isNew": true,
-    "trackNote": "현대차 정몽구 재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "c00f1410",
-    "company": "메르세데스-벤츠 사회공헌위원회",
-    "type": "news",
-    "status": "open",
-    "title": "벤츠 사회공헌위, 모바일 아카데미 우수 수료생과 본사 탐방",
-    "summary": "벤츠 사회공헌위, 모바일 아카데미 우수 수료생과 본사 탐방&nbsp;&nbsp;v.daum.net",
-    "date": "2026-07-06",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1jcTBUM05qSm5odHpHQzRqajI2TDNVc2pxWTJCSTJZVWtkRkRhZjljQkh3bzVoQ29IVWxuVGEwN1Z6a1BJTnVwM1J4SEx4MGs?oc=5",
-    "isNew": true,
-    "trackNote": "메르세데스-벤츠 사회공헌위원회 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "61c7595a",
-    "company": "현대자동차그룹",
-    "type": "news",
-    "status": "open",
-    "title": "[시경Today-자동차] 현대차그룹, PnC 확산 협력... 혼다코리아, 여름 안전교육 운영 외",
-    "summary": "[시경Today-자동차] 현대차그룹, PnC 확산 협력... 혼다코리아, 여름 안전교육 운영 외&nbsp;&nbsp;meconomynews.com",
-    "date": "2026-07-07",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTFAtQ1llcXJ5Yk00eHpwSE5nNENRVHc5bk5kdURMSEc3ZnhLY1IySTRJQnFwWEVGQ1hXM3U3ZjJvZkh0V1RzckFYMTluQk9zZ0xYUTZqY05iT0J2NEE3VElLUW1tSUdQa2lxdnRldkRIR2s?oc=5",
-    "isNew": true,
-    "trackNote": "현대자동차그룹 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "50895410",
-    "company": "아산나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "아산나눔재단, '아산 비영리스타트업' 2026 도전트랙 참가팀 10곳 선정",
-    "summary": "아산나눔재단, '아산 비영리스타트업' 2026 도전트랙 참가팀 10곳 선정&nbsp;&nbsp;바끄로뉴스",
-    "date": "2026-07-07",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE9EOFg1SEFkdGM0amxNSWxaUlFza2VzOUY5RGpsaDJvM2s5TWwzcWIyRUQ2c2J4SkJleXdyLXRHTm5ZRWQ1RkhxZlVobElXQXlCdHRBclc2Z3h6TnFzcEp0M2ZQME1BMU0?oc=5",
-    "isNew": true,
-    "trackNote": "아산나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "093bbf94",
-    "company": "우리은행",
-    "type": "recruit",
-    "status": "open",
-    "title": "은행권 ‘K-뉴딜 아카데미’ 운영기관 선정·홈플러스 협력사 대출 지원·미래 과학기술인재 육성 MOU·지역상생 금융 확대",
-    "summary": "은행권 ‘K-뉴딜 아카데미’ 운영기관 선정·홈플러스 협력사 대출 지원·미래 과학기술인재 육성 MOU·지역상생 금융 확대&nbsp;&nbsp;통신일보",
-    "date": "2026-07-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE5FMTVkQ0xlb2cxa0R0TFowd0ZuNnZUOGR0b3liOVJtalFlN2lZLVVwdXlrRWVFY1FBSmlxRUJKMjhWSm0wanJ2MFpqcTQ3RWlycXZFRzlPTGJmWjZscm0wdUxpSQ?oc=5",
-    "isNew": true,
-    "trackNote": "우리은행 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "73d4e64d",
-    "company": "우리은행",
-    "type": "news",
-    "status": "open",
-    "title": "우리금융, 고용노동부 ′K-뉴딜 아카데미′ 기관 선정…청년 IT 인재 육성",
-    "summary": "우리금융, 고용노동부 ′K-뉴딜 아카데미′ 기관 선정…청년 IT 인재 육성&nbsp;&nbsp;메가경제",
-    "date": "2026-07-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE4tRkVZTEVEUC1PcXI2bmpsaE9OOTh4QzhHdTZIdHBqMjBzQzE3VWM4MEp0clpDZGloRUFQbHdqUTZkZUpFZDdIWkZVV1RNa2Y0cUNFVkZxMHdaSFQtSEhsVVpTQkxDUFhYXzRCSG56M1B0UQ?oc=5",
-    "isNew": true,
-    "trackNote": "우리은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "d279c92f",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "[경제소식] ‘NH전남광주통합특별시 동행예금’ 조기 완판",
-    "summary": "[경제소식] ‘NH전남광주통합특별시 동행예금’ 조기 완판&nbsp;&nbsp;포쓰저널",
-    "date": "2026-07-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE9Na3NFZGlQSi16OXppMGtyQ2RXd0NrbDhUSEk3WTEwUG1YTnh0VERYYmtxUVdZNUZwQ2toalBrRUJ0WGUySVVBeWdMM1lyVG1lTmFjWFVrYUhBYlpfS2wwSktvZ3E?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1ac72c25",
-    "company": "새마을금고중앙회",
-    "type": "recruit",
-    "status": "open",
-    "title": "경기도, ‘사회연대경제 청년 일경험 시범사업’ 참여기업 모집",
-    "summary": "경기도, ‘사회연대경제 청년 일경험 시범사업’ 참여기업 모집&nbsp;&nbsp;SR타임스",
-    "date": "2026-07-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE5MaVNNelpKTDdQNkVZZl9VMXVYVUdPQ014WWlQYl9mR2ttRkVWRzdpcEc4WTRMeWdOTnZnUENZRU5nSXBNRWVUTUd2anU1SXY2UWg1dThUVGxJMzZYQThreUEzanJrS1Ry0gFrQVVfeXFMTXRyNEJxdGFGdWFLS002eUNjQnNJSHlZczB1UzN2LVM1dUNzT1Z4VXlubEpTaE91b2RMMVVFRkRGdllfd3ZSeVdzeFNoZU1rT2JQVWY1UzB0TWpBNVFKVmo3cWhYUzNERV9hdWc?oc=5",
-    "isNew": true,
-    "trackNote": "새마을금고중앙회 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "0aa6c363",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "오산시치매안심센터, 치매극복선도기업 2곳 신규 지정… 치매 친화적 지역사회 조성 확대",
-    "summary": "오산시치매안심센터, 치매극복선도기업 2곳 신규 지정… 치매 친화적 지역사회 조성 확대&nbsp;&nbsp;경기탑뉴스",
-    "date": "2026-07-10",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE9YMy12ZFg5RDF4OEIxR2JBQkhSRTF2WEhqemF0d2dTWXhZNjhSNE85OE9mX0xEekkwdWUyZVZoWDhTclVJLWltXzhOLUhqcERDYnJTRmV2NnRWcmhSTktVTHdCSQ?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4e1bd376",
-    "company": "신한희망재단",
-    "type": "news",
-    "status": "open",
-    "title": "신한지주, 에든버러·런던서 해외 IR...글로벌 투자자 소통 확대",
-    "summary": "신한지주, 에든버러·런던서 해외 IR...글로벌 투자자 소통 확대&nbsp;&nbsp;청년일보",
-    "date": "2026-07-12",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE5VZDRQS1pWWjZOdFljS045MnZYcDJWQUl6Wm5RSlBFeUN3TGdpbUhnSlFfSjFmaUEwWFBrWElhaVBGMFZiaGpRWDVBWHRyaHRVcnctUmxreDdMN0pXU1pkOXYwb1A0OEk?oc=5",
-    "isNew": true,
-    "trackNote": "신한희망재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "977e65cc",
-    "company": "LS그룹",
-    "type": "recruit",
-    "status": "open",
-    "title": "안성시, 경기도 통합돌봄도시 공모사업 선정",
-    "summary": "안성시, 경기도 통합돌봄도시 공모사업 선정&nbsp;&nbsp;자치안성신문",
-    "date": "2026-07-12",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTFByenRXMTYxZUVicjU3dWJPNkpGd1B3cGNkaXdHdmpMMnlZcm1Rc1hrSFZ0NGZQMUZOaEhBcVNyNzFqWERUUHJrbGtHNGgyWDhMQ3QxdmU1bGhyZndSOTBEWExHeDh2anBzZ1pHdHdhMXJ5YkNoWmpQZVVNZVg?oc=5",
-    "isNew": true,
-    "trackNote": "LS그룹 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "6e462442",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "2026년 첫 햅쌀 출하 기념, NH농협은행 이천시지부 백미 8,000kg 사회복지시설 기부",
-    "summary": "2026년 첫 햅쌀 출하 기념, NH농협은행 이천시지부 백미 8,000kg 사회복지시설 기부&nbsp;&nbsp;리버럴미디어",
-    "date": "2026-07-13",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE9Dd2dnRnpib0haTFpzdTQxdTROb21sa3lyeWhLRzBSLVk3RXAyenl2b0p1NG8xU1FPOXJwT0RTYkl6Q0FidG5PMHV4UkhpNGZNQWdqREh5aF9XOWtUYWlxRzRJcnA?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "6a6a6a3d",
-    "company": "네이버 커넥트재단",
-    "type": "news",
-    "status": "open",
-    "title": "넥슨, '메커톤 2026' 성료…메이플스토리 IP 창작 생태계 확대 본격화",
-    "summary": "넥슨, '메커톤 2026' 성료…메이플스토리 IP 창작 생태계 확대 본격화&nbsp;&nbsp;청년일보",
-    "date": "2026-07-13",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE1lQjQ3cE5oX0VaSGZkMjNWYUNjWm5PdjY4YVJhdmsxcXlfbXdGZHlpMjc5ZjZqUDdxZ2tJQWp5ZG1mMjRCUnlNM21fdzVVeUdmQUx1RGZqOHZWSUVtWG1JUDVtU01nZ0k?oc=5",
-    "isNew": true,
-    "trackNote": "네이버 커넥트재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "3ed697c3",
-    "company": "넥슨재단",
-    "type": "news",
-    "status": "open",
-    "title": "넥슨, '메커톤 2026' 성료…메이플스토리 IP 창작 생태계 확대 본격화",
-    "summary": "넥슨, '메커톤 2026' 성료…메이플스토리 IP 창작 생태계 확대 본격화&nbsp;&nbsp;청년일보",
-    "date": "2026-07-13",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE1lQjQ3cE5oX0VaSGZkMjNWYUNjWm5PdjY4YVJhdmsxcXlfbXdGZHlpMjc5ZjZqUDdxZ2tJQWp5ZG1mMjRCUnlNM21fdzVVeUdmQUx1RGZqOHZWSUVtWG1JUDVtU01nZ0k?oc=5",
-    "isNew": true,
-    "trackNote": "넥슨재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "16d92ac4",
-    "company": "NC문화재단",
-    "type": "recruit",
-    "status": "open",
-    "title": "넷마블문화재단, '2026 게임소통학교' 참가 가족 모집",
-    "summary": "넷마블문화재단, '2026 게임소통학교' 참가 가족 모집&nbsp;&nbsp;네이트",
-    "date": "2026-07-13",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTFBhUi0wc3FaQ21jUHhibU4xbGtDSm1FeHNNb0VvNVNvZTdlVnQ5TWM2QWJRbjdZWHhvT3RFdmFGV0V3MXZ5VlRZaFdnTTV4MFItMV92YkJlbnNCcFJF?oc=5",
-    "isNew": true,
-    "trackNote": "연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. NC문화재단 담당자 컨텍 유지 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1e30eb29",
-    "company": "넷마블문화재단",
-    "type": "recruit",
-    "status": "open",
-    "title": "넷마블문화재단, 학부모 교육부터 직업체험까지…‘2026 게임소통학교’ 참가자 모집",
-    "summary": "넷마블문화재단, 학부모 교육부터 직업체험까지…‘2026 게임소통학교’ 참가자 모집&nbsp;&nbsp;뉴스드림",
-    "date": "2026-07-13",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE11MjBEVXk2aVpTeVVYMWs1Z0NqWllRblBMLUNNakpuTHlHVlhfeXBvYjdjY2FGZ0t5NnFfM3l2aFBLYjZMYjVKeWtIbFN5dXdFTlZDajVkNTNVSF9vMGNCYUhOdEczX3VfeHfSAW5BVV95cUxQVG9LYkJfMFFOYnZwUzZuZXJWMjhaU3Utb3NkZjdjbXF3RVpZVldma1FmZ1NoTzViVjFUZEQtMzdrdFdrNGF2dkRQSloxMmswZGZjajZ5blhDZlVrT0JtR1N1YnB6OTc4NU1uaFoyZw?oc=5",
-    "isNew": true,
-    "trackNote": "연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. 넷마블문화재단 담당자 컨텍 유지 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "d5937072",
-    "company": "한화그룹",
-    "type": "recruit",
-    "status": "open",
-    "title": "넷마블재단, ‘2026 게임소통학교’ 참가자 모집…26일까지",
-    "summary": "넷마블재단, ‘2026 게임소통학교’ 참가자 모집…26일까지&nbsp;&nbsp;서울경제TV",
-    "date": "2026-07-13",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE1HRFl0T0VYWHNIMVhLNC0xaHdZdHBXckQ0d1ZEQ01JN0NMUGJIX2U3QVhOaXZzR296SHI4VWQtc29PVWpOdXZFWEZWZU5QSm56ZWpPTWpLZjFydFNHXzlMYTNEQVM?oc=5",
-    "isNew": true,
-    "trackNote": "연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. 한화그룹 담당자 컨텍 유지 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "c074d580",
-    "company": "우리은행",
-    "type": "recruit",
-    "status": "open",
-    "title": "장성군 관광문화재단 출범 초읽기…초대 임원 공모",
-    "summary": "장성군 관광문화재단 출범 초읽기…초대 임원 공모&nbsp;&nbsp;서울경제TV",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE1XempUSU8xZi1oM3lUM21pbXFNSm1ObzJyUUJuMHcteVp1NU9CUXV0dVdpTlJQN0VwOHRfZF8tc3NZcklzRFhIZmVFNTZUcU02SzNoTDZoUmhBcjhPSERvQWMyLV9PakE1RVU0?oc=5",
-    "isNew": true,
-    "trackNote": "우리은행 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "a7eb3677",
-    "company": "우리은행",
-    "type": "news",
-    "status": "open",
-    "title": "우리은행, 서울경제진흥원과 취약계층 금융교육 확대",
-    "summary": "우리은행, 서울경제진흥원과 취약계층 금융교육 확대&nbsp;&nbsp;v.daum.net",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9XU3B6cjY0SGRROFhVVHU3UTRNbEQxaDhqczhLZS1IQnpuY2ktaWlfWnM3R0RDRUtmcko2V01YU0o0eEN5TjdObncxVW9STEE?oc=5",
-    "isNew": true,
-    "trackNote": "우리은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "5c715ce6",
-    "company": "LS그룹",
-    "type": "news",
-    "status": "open",
-    "title": "안성종합사회복지관, (사)아이코리아 안성지회와 업무협약 체결",
-    "summary": "안성종합사회복지관, (사)아이코리아 안성지회와 업무협약 체결&nbsp;&nbsp;자치안성신문",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE1hQk5PeG9ScjVpc1E1SzBRUGdESVl3SHJmSC0yb2lNUVFsQjZDcElqSGppY2d3aXk4QkhXd0tvX0lrckN1LW9rVmxFQzM4NmpFcER1dlJmQ3VmeGQxZFNIOXdFVG9OVWVUcHFXOWNpbDM4bEdldzdfT3hTMjg?oc=5",
-    "isNew": true,
-    "trackNote": "LS그룹가 외부 기관과 협약·위탁 계약 체결. 통상 1년 계약이므로 약 9~10개월 후 재계약 시점. 현 파트너 종료 전 KMA를 대안 파트너로 제안하는 타이밍 공략 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4f71c5cc",
-    "company": "LS그룹",
-    "type": "news",
-    "status": "open",
-    "title": "안성시 읍‧면‧동 지역사회보장협의체 연합 간담회",
-    "summary": "안성시 읍‧면‧동 지역사회보장협의체 연합 간담회&nbsp;&nbsp;자치안성신문",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTFBaakhxQ0hZOEtaMDJjejhEeEl3ZkdWbFNKamJ4WlNPSWFFNzREcERXS3JCUDdaUU8tS09PWTU3V0p5RHVIOWJ2dDdTTWY1X0pMUU41c0ZBNFZQRnVDeTFnTG9PbXdXaDhiQjladjdma0FEYzlaTlVZRkdZR1o?oc=5",
-    "isNew": true,
-    "trackNote": "LS그룹 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "e157ceb8",
-    "company": "LG전자",
-    "type": "news",
-    "status": "open",
-    "title": "\"장애 청소년 AI 역량 강화\"…LG전자, 대전서 GITC 한국대회 개최",
-    "summary": "\"장애 청소년 AI 역량 강화\"…LG전자, 대전서 GITC 한국대회 개최&nbsp;&nbsp;청년일보",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE80WWdBU0Z6RXNVTWdBRG9uTG5vRFl5TVE1QXRnYVFKSWZkVmwtM3dWVTVJZE9fcXVNTHg2RTh3ZFB6ZmtzbkFSbWpnbkNiVFpZRXlmQlU1RnB4MW5ycVMySnlGRnlYV1E?oc=5",
-    "isNew": true,
-    "trackNote": "LG전자 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "6fbef99e",
-    "company": "카카오임팩트재단",
-    "type": "news",
-    "status": "open",
-    "title": "게임업계·공공기관 12곳 맞손…'2026 유스 e스포츠 페스티벌' 전국 확대 개최",
-    "summary": "게임업계·공공기관 12곳 맞손…'2026 유스 e스포츠 페스티벌' 전국 확대 개최&nbsp;&nbsp;청년일보",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE5taG54eTBIc3BJZl9hNnZPRl9OMml6WFlYOHVOQk1UQ2ZZQ2t6X2pJV19lYXZycFBRM0JUNlJZY1doMVdoZzl0WFgtbU9HcFdyYTcwV1R3Qk8xbU5fdC1xU0E2RmxEZm8?oc=5",
-    "isNew": true,
-    "trackNote": "카카오임팩트재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "d59c8510",
-    "company": "넥슨재단",
-    "type": "news",
-    "status": "open",
-    "title": "넥슨재단·슈퍼셀·스마게 등 참여, 2026 유스 e스포츠 열린다",
-    "summary": "넥슨재단·슈퍼셀·스마게 등 참여, 2026 유스 e스포츠 열린다&nbsp;&nbsp;게임메카",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE52MkVIRnJZc0xzREJQZElOMUdxd0FTYVozZHdQbExXTVJrUGxEUE9sYXhQSUJEM0x3dG84Z0daTzhFckFZTUtndTRpbHk0UHBuZzZ4MC02QjjSAVtBVV95cUxQZFZ3Y0xseDNvbUVFdFVYMVI1UWNLQ29BV210X2dwdHIzdkwtbXEzS0FhU3RPYV9yU1dYR3ByMjhCcEZTd1VlV3ZuMUlGcmItckh5Mjc2UFU3NTNV?oc=5",
-    "isNew": true,
-    "trackNote": "넥슨재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "3848d1a8",
-    "company": "NC문화재단",
-    "type": "news",
-    "status": "open",
-    "title": "NC문화재단, 미래세대를 위한 그림책 '엄청난 막대기' 출간",
-    "summary": "NC문화재단, 미래세대를 위한 그림책 '엄청난 막대기' 출간&nbsp;&nbsp;전자신문",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE9fSVN1RmRadlI1NjJXLXVYS3ZYblk3Vk1KRmVjZUNQNTU5d0Y4encwU2toOW9wTEtlaF91NHJNQUwxYVVWbmVQZDZ5aHpYdw?oc=5",
-    "isNew": true,
-    "trackNote": "NC문화재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "901e0aeb",
-    "company": "스마일게이트 희망스튜디오",
-    "type": "news",
-    "status": "open",
-    "title": "게임업계·공공기관 12곳 맞손…'2026 유스 e스포츠 페스티벌' 전국 확대 개최",
-    "summary": "게임업계·공공기관 12곳 맞손…'2026 유스 e스포츠 페스티벌' 전국 확대 개최&nbsp;&nbsp;청년일보",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE5taG54eTBIc3BJZl9hNnZPRl9OMml6WFlYOHVOQk1UQ2ZZQ2t6X2pJV19lYXZycFBRM0JUNlJZY1doMVdoZzl0WFgtbU9HcFdyYTcwV1R3Qk8xbU5fdC1xU0E2RmxEZm8?oc=5",
-    "isNew": true,
-    "trackNote": "스마일게이트 희망스튜디오 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "d9f46272",
-    "company": "넷마블문화재단",
-    "type": "recruit",
-    "status": "open",
-    "title": "넷마블문화재단, ‘2026 게임소통학교’ 참가 가족 모집…“게임 이해 돕고 가족 소통 넓힌다",
-    "summary": "넷마블문화재단, ‘2026 게임소통학교’ 참가 가족 모집…“게임 이해 돕고 가족 소통 넓힌다&nbsp;&nbsp;청년투데이",
-    "date": "2026-07-14",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5pSU9hZVl2Tks2dmFEQWFHQy1abWVQVTItbGxTQ0xjbUEwREpIaVdRVF9LS0xLRXFKNk5BblMtbVR0aWRMcDE2U01aV043RWRxdHo2ZW5SZ19PSDRZa0c0Z3M5eDVNNFhjY1E?oc=5",
-    "isNew": true,
-    "trackNote": "연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. 넷마블문화재단 담당자 컨텍 유지 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "654f9e19",
-    "company": "국민은행",
-    "type": "news",
-    "status": "open",
-    "title": "[금융 레터] KB국민은행, 서울교통공사 주거래은행에 3회 연속 재선정..外",
-    "summary": "[금융 레터] KB국민은행, 서울교통공사 주거래은행에 3회 연속 재선정..外&nbsp;&nbsp;데일리e뉴스",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE5zNlBSMlVfR3VEVF9oenhteHlvVkhJS1hxZVRKaExmTUpKTlRabmFZbzFkT3BaR0xRWG90YUFJdDhGUmhBblhwcHZUakpOODRsdmpITTVNeC1FN3plZml1dDNaRWlnZWJYUVQtem5Dcw?oc=5",
-    "isNew": true,
-    "trackNote": "국민은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "01e297a6",
-    "company": "국민은행",
-    "type": "news",
-    "status": "open",
-    "title": "KB국민은행, 서울교통공사 주거래은행 재선정",
-    "summary": "KB국민은행, 서울교통공사 주거래은행 재선정&nbsp;&nbsp;청년일보",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE9mekEydWhGUWxtYnJlUlRxV0prdkZiWWU2NVc1UnZMUm9hRXBBbXJNcXJyRG53M3hqTVdMdkI1WU1DR3gyUnFMVlB4NUMtSzVIcEk3RHNxZXl2ZXZXR0F3LUJUY2M2RDg?oc=5",
-    "isNew": true,
-    "trackNote": "국민은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1a61f331",
-    "company": "국민은행",
-    "type": "news",
-    "status": "open",
-    "title": "[금융 이모저모] KB국민은행, 하나은행, BNK경남은행",
-    "summary": "[금융 이모저모] KB국민은행, 하나은행, BNK경남은행&nbsp;&nbsp;워크투데이",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE9oVXMyT1RfSnJDVVFLalFTcGktNjBDcVFYV2dWRE1oMzdiNGVGdW9qQkdqcmIxWEtNNmszLVVDQzA5dk5CSFhabnhBZkh2cmNXbEdSWk9HdmxYM0JDalczR01rVlNNYUxJTjhXaA?oc=5",
-    "isNew": true,
-    "trackNote": "국민은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "3855d60c",
-    "company": "우리은행",
-    "type": "news",
-    "status": "open",
-    "title": "SBA, 우리은행과 ‘서울 영테크’ 취약계층 금융교육 확대",
-    "summary": "SBA, 우리은행과 ‘서울 영테크’ 취약계층 금융교육 확대&nbsp;&nbsp;벤처타임즈",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE1KTEVLY0hMS0cxX2hJdWFwcHktQWl5dGt2RExwdHM4Y0FaRkNGb1M4TWM0ellYWkQzaVpyTW55MnhvRUR1Z2lIMkJ3RE9oUnBlS1NJbFA2dzY2WkItRmh3WWtnWlF1Zw?oc=5",
-    "isNew": true,
-    "trackNote": "우리은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1e8ed5be",
-    "company": "우리은행",
-    "type": "news",
-    "status": "open",
-    "title": "SBA-우리은행, 「서울 영테크」 특화교육 금융취약계층까지 확대 - sisa",
-    "summary": "SBA-우리은행, 「서울 영테크」 특화교육 금융취약계층까지 확대&nbsp;&nbsp;sisa-n.com",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5FTlEwX250QjYxVFBmOFZMem9tQmtmYTQtbWdpejV5bDU2czFJMmtFcEtFeklmUGI4Wm9VRVBwQXpfVmVRTFJ5aXlfcjM2ZHdl?oc=5",
-    "isNew": true,
-    "trackNote": "우리은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "10ce6079",
-    "company": "CJ나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "CJ도너스캠프·티머니복지재단, 도서산간 아동·청소년 문화체험 지원 협력",
-    "summary": "CJ도너스캠프·티머니복지재단, 도서산간 아동·청소년 문화체험 지원 협력&nbsp;&nbsp;파이낸셜신문",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE1MTnJmMHlFaUVNcjgyZGszZW5DX2x2dUFBWVRxOXhSSHhfdHpncTR1eG5aN2pXd1NIVHlRcjhQSlJpZThPekFzaEg2TzJ0VG50aTJBa3hySnZqUFAwOTR5Z0lyX2N2dw?oc=5",
-    "isNew": true,
-    "trackNote": "CJ나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "dda45352",
-    "company": "CJ나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "CJ도너스캠프-티머니복지재단, 도서산간 아동 여름방학 문화체험 지원",
-    "summary": "CJ도너스캠프-티머니복지재단, 도서산간 아동 여름방학 문화체험 지원&nbsp;&nbsp;일요주간",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE5pR2hYanJqZG9JMTVhNncwZG4zMkFORXZ2elNyblNTdXZmOVpJLXhPaUpxd0RybmZjV0lQN3lEaHc2Yk1mdFloQzRtMHBXOHRWUURtT2VrcllRUjFmZjNQZy1DZy1PZ19XcDVfQ2hUYkg3endqbWNhag?oc=5",
-    "isNew": true,
-    "trackNote": "CJ나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "45a8f8c5",
-    "company": "CJ나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "[ESG] CJ도너스캠프-티머니복지재단, 도서산간 아동·청소년 문화체험 지원 확대",
-    "summary": "[ESG] CJ도너스캠프-티머니복지재단, 도서산간 아동·청소년 문화체험 지원 확대&nbsp;&nbsp;비즈니스리포트",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE8zR1UxSW5lQXQwOVRrejQ4TFhhQVZuV1VBTGJuUUI0VzZMbUVFQi1ubjJyYWhla0JxeXU2WFJnR2VyUE0zMVVpQW9sRXhNNWktdkpSMXllcTNKcWR5ZW5WWXcwQ2RkMUIwbC04?oc=5",
-    "isNew": true,
-    "trackNote": "CJ나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "81d3dc95",
-    "company": "CJ나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "CJ도너스캠프, 티머니복지재단과 맞손… 도서산간 아동·청소년 문화체험 기회 넓힌다",
-    "summary": "CJ도너스캠프, 티머니복지재단과 맞손… 도서산간 아동·청소년 문화체험 기회 넓힌다&nbsp;&nbsp;CJ 뉴스룸",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMivwJBVV95cUxPQWRPVURUUjBrX2FDVkJyRG1jYURQMW1lSXNzUkxhLUtQT19sUE5fYWROcUR2VlE0SnJvLUNhTEhnZm5jUDJ0Q3RCWkh3MjRxeGZ1QzJULXlMNFRnV2pLdkJsRW5hTUx5eVl3MmxFb0swVWhvM0d1RXI3eG9EZjVUS280Y1pLTGNKUXBJOTVtdjU1ZF9wTTF0OXpEeUNWRU94NVJzYjluRWR3NlNrOXZSeU0xM01UTXpza2k4VWRYUnVWU3JxQkpMcy1OeGxvSFA1c01Uc2RRYzNKeWZicGx0MGVGdGtwQVZHYW1YUTd0N280RFd0NXRDRmhvTnR3MmdTdnFQLUxnY09HTVZQZFBvSGtXb3hOZ3N6QXhBVUU4YV8xc09SMjVxYmhKdFROWWVQM1pSWjhSbXhUQjVGdmdR?oc=5",
-    "isNew": true,
-    "trackNote": "CJ나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "3fee43d2",
-    "company": "IBK행복나눔재단",
-    "type": "recruit",
-    "status": "open",
-    "title": "중소상공인희망재단, '제11회 소상공인 쇼케이스데이' 참가기업 모집",
-    "summary": "중소상공인희망재단, '제11회 소상공인 쇼케이스데이' 참가기업 모집&nbsp;&nbsp;전자신문",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE04RlBZM1VPdlVTODJBVmdhbGl0UkV6QjhncUVFcG9vOWlYQVl5d2VWS3VzcnNiOHlsMXRpM1lZSmxmYjZNb193R3laemlrUQ?oc=5",
-    "isNew": true,
-    "trackNote": "IBK행복나눔재단 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "33d58bfe",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "[금융 레터] KB국민은행, 서울교통공사 주거래은행에 3회 연속 재선정..外",
-    "summary": "[금융 레터] KB국민은행, 서울교통공사 주거래은행에 3회 연속 재선정..外&nbsp;&nbsp;데일리e뉴스",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE5zNlBSMlVfR3VEVF9oenhteHlvVkhJS1hxZVRKaExmTUpKTlRabmFZbzFkT3BaR0xRWG90YUFJdDhGUmhBblhwcHZUakpOODRsdmpITTVNeC1FN3plZml1dDNaRWlnZWJYUVQtem5Dcw?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4246f86a",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "양평군,NH농협은행 양평군지부 \"치매 안전망 맞손\"",
-    "summary": "양평군,NH농협은행 양평군지부 \"치매 안전망 맞손\"&nbsp;&nbsp;양평백운신문",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE5NV01yVWNFaEprYlJ0Y2Ftc1p5blVXeWdNZ3dPZHlQeExVelpjSUVnajBhS2RwQ0lPbE5EeDBIcnd2YkFMQXRZdDlpblhHbFg0azNQWExJeUlnZC1zckhnb2NCeWo?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "f4222d5d",
-    "company": "BNK금융그룹",
-    "type": "news",
-    "status": "open",
-    "title": "BNK금융그룹, 부산 서민금융복합지원센터 문 열어…취약계층 자립·재기 돕는다",
-    "summary": "BNK금융그룹, 부산 서민금융복합지원센터 문 열어…취약계층 자립·재기 돕는다&nbsp;&nbsp;한국경제",
-    "date": "2026-07-15",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBUUnE2dDJ0YVNtSkdvdkZUYS03U2ZXSTlhb2tVZ0JFcjdvMExZOENPVkJCV2l6UnJ1d01uMjU2X1NNUzlMaFJpN2JuR0h4aVg5cWJCSnctNUM3dw?oc=5",
-    "isNew": true,
-    "trackNote": "BNK금융그룹 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "155b8456",
-    "company": "현대자동차그룹",
-    "type": "recruit",
-    "status": "open",
-    "title": "현대차, 친환경 러닝 캠페인 '포레스트런 2026' 참가자 모집",
-    "summary": "현대차, 친환경 러닝 캠페인 '포레스트런 2026' 참가자 모집&nbsp;&nbsp;청년일보",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE1xcVJiUklZbUpKUERmN05PdG8yM2dNZXJWZG52dDdLR0pVR2FSb2Fxa3FmWFlKQXliRG5GaHg5bnpubmx2Tk1VSFU0eWpXNTBWMi1DYlJoNUVwaERQbUxFQTJNbTk0NDA?oc=5",
-    "isNew": true,
-    "trackNote": "연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. 현대자동차그룹 담당자 컨텍 유지 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "45fd5fec",
-    "company": "현대자동차그룹",
-    "type": "recruit",
-    "status": "open",
-    "title": "현대자동차, 함께 달려 나무를 심는 '포레스트런 2026' 참가자 모집",
-    "summary": "현대자동차, 함께 달려 나무를 심는 '포레스트런 2026' 참가자 모집&nbsp;&nbsp;모토야",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE1TUUhlVXlzZThfY21sV2RMZlNZbkJhUTBEYjBLdjZRM3NYd21ydEdXX3hQUmt6Z0F5OFpWU0RjWXRxT2NkUi1rYldWcC1wSEdwcXRadmFFS2dvMGMwRHZERHJQVUJHOS02YlE?oc=5",
-    "isNew": true,
-    "trackNote": "연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. 현대자동차그룹 담당자 컨텍 유지 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "01b280ed",
-    "company": "현대자동차그룹",
-    "type": "recruit",
-    "status": "open",
-    "title": "\"러닝으로 환경 지켜요\"…현대차, 포레스트런 참가자 모집",
-    "summary": "\"러닝으로 환경 지켜요\"…현대차, 포레스트런 참가자 모집&nbsp;&nbsp;네이트",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiU0FVX3lxTE1LUHhqVldZRjNvR2J5QktxLUo3R0kxUjUtNWVKQmljQU56Z1M4MzAxbmJWV2o3QWtiNmR4bmdZX3lIY3dtNVpRRzZOVHRFZDJRek00?oc=5",
-    "isNew": true,
-    "trackNote": "현대자동차그룹 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1eabae6d",
-    "company": "CJ나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "CJ도너스캠프, 도서산간 아동·청소년 여름방학 문화체험 지원 강화…티머니복지재단과 협력",
-    "summary": "CJ도너스캠프, 도서산간 아동·청소년 여름방학 문화체험 지원 강화…티머니복지재단과 협력&nbsp;&nbsp;주간현대",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiQ0FVX3lxTE9qM19rMlJQcldlMjBQYVhJYXNNTTI2TXhYcFROM2JNdEtMdy1TRDFwMndYV2pJellkYmgxTzAzZUhqMW8?oc=5",
-    "isNew": true,
-    "trackNote": "CJ나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "e08a4ad4",
-    "company": "하나금융그룹",
-    "type": "news",
-    "status": "open",
-    "title": "\"시니어가 큰 손님\"...금융권, 초고령사회 진입 속 노후 마케팅 '총력'",
-    "summary": "\"시니어가 큰 손님\"...금융권, 초고령사회 진입 속 노후 마케팅 '총력'&nbsp;&nbsp;청년일보",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE5hdkp2U1dLRFVGZW9ydGxFOHhoVVViaDUtaFNYVmxueGNuTkFyc0FqMHJfTnlKTkc2SmVsaFo0bTc5MlM0VExzNnhvWnhQSzV4dEVWSXZENnJBLS1zYVg4c29LV0RlODQ?oc=5",
-    "isNew": true,
-    "trackNote": "하나금융그룹 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "f5f7bf39",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "\"시니어가 큰 손님\"...금융권, 초고령사회 진입 속 노후 마케팅 '총력'",
-    "summary": "\"시니어가 큰 손님\"...금융권, 초고령사회 진입 속 노후 마케팅 '총력'&nbsp;&nbsp;청년일보",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE5hdkp2U1dLRFVGZW9ydGxFOHhoVVViaDUtaFNYVmxueGNuTkFyc0FqMHJfTnlKTkc2SmVsaFo0bTc5MlM0VExzNnhvWnhQSzV4dEVWSXZENnJBLS1zYVg4c29LV0RlODQ?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "c1747978",
-    "company": "새마을금고중앙회",
-    "type": "news",
-    "status": "open",
-    "title": "새마을금고중앙회, 공동 사회공헌사업에 3억원 지원 새마을운동중앙회와 맞손…지역사회 상생 협력",
-    "summary": "새마을금고중앙회, 공동 사회공헌사업에 3억원 지원 새마을운동중앙회와 맞손…지역사회 상생 협력&nbsp;&nbsp;더글로벌기빙뉴스",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE5id2pFOFBmU0loU3RlN1hoT2FHWHdwY1kweGdrWXlRNXB4bWpWZ1RtM1VlMU10eFJMTzdJcEhLX3NneDA4aUhxeHA1MGEyV2xWNkNSMQ?oc=5",
-    "isNew": true,
-    "trackNote": "새마을금고중앙회 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "72fd84ea",
-    "company": "새마을금고중앙회",
-    "type": "news",
-    "status": "open",
-    "title": "새마을금고, 취약계층 한끼 지원·청년 해외봉사 나선다",
-    "summary": "새마을금고, 취약계층 한끼 지원·청년 해외봉사 나선다&nbsp;&nbsp;SR타임스",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE42V2I3Y0V6MjMxcVJPb3YwYUVmWW51S3g3cV83LVA5NDRmQ3RVdjYwdTNfakRRbzNibV9LZ0pkYWx1MmprY2I2VXljUWFWOFhWVU5XUlNCOTFobWlrdUNkRHdDRnhtdnNH0gFrQVVfeXFMT1V1aWJETTBLYVdWNlgwT2lwY0Jqa3VDYjhuX190a0JxUTd6YS1FdS1oRWxnQkhtYm54ZUNpUnZ4YTRDWW16VjQ4VFZjeWxibkY0dDROY2lYRmV5eVFtdndoZkVWQW9nQ0hhVzg?oc=5",
-    "isNew": true,
-    "trackNote": "새마을금고중앙회 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "fba01667",
-    "company": "BMW 코리아 미래재단",
-    "type": "recruit",
-    "status": "open",
-    "title": "멘토링부터 팝업 전시까지…BMW 미래재단, 대학생 공모전",
-    "summary": "멘토링부터 팝업 전시까지…BMW 미래재단, 대학생 공모전&nbsp;&nbsp;뉴스핌",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTFBjbE90VVZNUFlNQUEtc3RWQnZuSmVQOTBCVng1WDVxamcyYzlmWllGeGFHLVlwOXVwNVdjZk9xTjQ4NC1WRzlsV21sYkl0RXdaV29EOWlGbzZLY3Ra?oc=5",
-    "isNew": true,
-    "trackNote": "BMW 코리아 미래재단 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "f67b1308",
-    "company": "BMW 코리아 미래재단",
-    "type": "news",
-    "status": "open",
-    "title": "BMW 코리아 미래재단, 2026 하반기 영 이노베이터 드림 프로젝트 진행",
-    "summary": "BMW 코리아 미래재단, 2026 하반기 영 이노베이터 드림 프로젝트 진행&nbsp;&nbsp;모터그래프",
-    "date": "2026-07-16",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTFB0M0g1TlhPZmNjbTdmYlNCbDFVeFdiRFN3bURxZjBxZFhsSnZtYWV2NmhIcGR5SEdHT0FvaDU2cnZ2bzRPMVN6bGRmdXJBRlp4VjlSRHFvTHJPYUs3c3FoZVFMQ3VJelEzc3Ezbg?oc=5",
-    "isNew": true,
-    "trackNote": "BMW 코리아 미래재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "fc9c3d12",
-    "company": "신협사회공헌재단",
-    "type": "recruit",
-    "status": "closed",
-    "title": "KB라이프사회공헌재단, 제28회 전국청소년자원봉사대회 참가자 모집",
-    "summary": "KB라이프사회공헌재단, 제28회 전국청소년자원봉사대회 참가자 모집&nbsp;&nbsp;한국보험신문",
-    "date": "2026-06-08",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBOMEVhbGZublRxYUZnRDlfQm1hQWRwOTRXLTA1SUNaOC04TlpxWkJueFpTNnR0R09qSkktR3dGSkdvd1p1NGFEUXowVFZXNWhuYl80Mi1rXzlkM2JIa1B5UVJDNi1NWUxpa2130gFvQVVfeXFMTnNwckgtM1hwN05DU2J3V05sbWdwS1BFa2NJejNzQmJyb2ZYNkYwOUNveERLTTd4UTcyc0NSNUFYWDZUUEwtb0Q2X3NweEJSLXZNZy1VNHpMQ0ZTSE9hX2xFd0l6UTRUZGVlSFVUY2VR?oc=5",
-    "isNew": true,
-    "trackNote": "신협사회공헌재단 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "약 10~12개월 후 — 다음 사업연도 모집 시점"
-  },
-  {
-    "id": "898ef249",
-    "company": "롯데장학재단",
-    "type": "news",
-    "status": "closed",
-    "title": "롯데장학재단, 캄보디아서 의료봉사·도서관 리모델링 지원",
-    "summary": "롯데장학재단, 캄보디아서 의료봉사·도서관 리모델링 지원&nbsp;&nbsp;청년투데이",
-    "date": "2026-06-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5jY01zbE1IenhCVF9SU2RoSzM5YWVSTDBqME1RSVIwV3ZCR2J2aFMzUTd3dEI2eW84UVJNNWpLQ1FSNnhPOEZoTUtvWHFZVzg0NGpETTdGQWRWOTY5MnM1enBFSlA3Z1NSaGc?oc=5",
-    "isNew": true,
-    "trackNote": "롯데장학재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "3~6개월 후 — 사업 기획 시점"
-  },
-  {
-    "id": "b1b22c36",
-    "company": "KT&G장학재단",
-    "type": "news",
-    "status": "closed",
-    "title": "美 캐피털그룹, KT&G 지분율 7.2%로 '확대'",
-    "summary": "美 캐피털그룹, KT&amp;G 지분율 7.2%로 '확대'&nbsp;&nbsp;청년일보",
-    "date": "2026-06-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTFBnRGVSdkdGc21zMnBzUTZieGlpQUg1RmdOaWhPZXI5MkZfYVRjRmpHaF9LN3hOV1o2Z1VHR0JuMy1uclV4QXpuemQyVFM5aDJHZzhKZDhCT1Y0VndPWDZQcW1xMFc4UTg?oc=5",
-    "isNew": true,
-    "trackNote": "KT&G장학재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "3~6개월 후 — 사업 기획 시점"
-  },
-  {
-    "id": "5bbfa15c",
-    "company": "신협사회공헌재단",
-    "type": "news",
-    "status": "closed",
-    "title": "[더밸류 브리핑] 오늘의 신협중앙회 소식...신협중앙회· 신협사회공헌재단",
-    "summary": "[더밸류 브리핑] 오늘의 신협중앙회 소식...신협중앙회· 신협사회공헌재단&nbsp;&nbsp;더밸류뉴스",
-    "date": "2026-06-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTFBwUjJEaWdQcjYwc3pDVUhtNjJydno3ZmFFem40MzlZT3EzR3pUS3MzTGZhNEo5bU9sbGhScmV5WE54UVBybWlnYlg5MW50V3RQam5STg?oc=5",
-    "isNew": true,
-    "trackNote": "신협사회공헌재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "3~6개월 후 — 사업 기획 시점"
-  },
-  {
-    "id": "d7811ed6",
-    "company": "신협사회공헌재단",
-    "type": "news",
-    "status": "closed",
-    "title": "철길 위에 희망을 싣다… 코레일, 사회공헌 사업 5건 선정",
-    "summary": "철길 위에 희망을 싣다… 코레일, 사회공헌 사업 5건 선정&nbsp;&nbsp;한국철도일보",
-    "date": "2026-06-09",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE5wUG1WUTVlei01OFZ6eTdxeUdGUWw5VERLaGNVY3V0eml0bFdRNEdRaC13QjVXVTBGZE93Y3E0Q3hHdHpfM1lrcmkwVmtHQnVOM1AyajZBNVRTOHFJbXdzM2tJei1fQndieVV5RjA1WUo?oc=5",
-    "isNew": true,
-    "trackNote": "신협사회공헌재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토.",
-    "trackWhen": "3~6개월 후 — 사업 기획 시점"
-  }
-];
-// FINDINGS_END
+    # 새 뉴스 수집
+    seen_ids = set(f.get('id') for f in current_findings)
+    new_findings = []
 
-let currentTab = 'all';
-let companyFilter = 'all';
+    # 우선순위 기업 개별 검색
+    for company in [c for c in COMPANIES if c['priority'] == 'high']:
+        for kw in COMPANY_KEYWORDS:
+            query = f"{company['name']} {kw}"
+            print(f"  검색: {query[:45]}")
+            results = fetch_google_news(query, days=45, max_results=3)
+            for r in results:
+                fid = make_id(company['name'], r['title'])
+                if fid in seen_ids:
+                    continue
+                seen_ids.add(fid)
+                t = classify_type(r['title'], r['summary'])
+                s = classify_status(r['title'], r['summary'], r['date'])
+                new_findings.append({
+                    'id': fid,
+                    'company': company['name'],
+                    'type': t, 'status': s,
+                    'title': r['title'], 'summary': r['summary'],
+                    'date': r['date'], 'deadline': None, 'url': r['url'],
+                    'isNew': True,
+                    'trackNote': generate_track_note(company['name'], t, r['title'], r['summary']),
+                    'trackWhen': generate_track_when(t, s),
+                })
+            time.sleep(0.5)
 
-function setTab(t, el) {
-  currentTab = t;
-  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
-  el.classList.add('active');
-  renderFeed();
-}
+    # 조건부 기업 통합 검색
+    for company in [c for c in COMPANIES if c['priority'] == 'cond']:
+        query = f"{company['name']} 사회공헌 교육 모집 2026"
+        results = fetch_google_news(query, days=30, max_results=2)
+        for r in results:
+            fid = make_id(company['name'], r['title'])
+            if fid in seen_ids:
+                continue
+            seen_ids.add(fid)
+            t = classify_type(r['title'], r['summary'])
+            s = classify_status(r['title'], r['summary'], r['date'])
+            new_findings.append({
+                'id': fid, 'company': company['name'],
+                'type': t, 'status': s,
+                'title': r['title'], 'summary': r['summary'],
+                'date': r['date'], 'deadline': None, 'url': r['url'],
+                'isNew': True,
+                'trackNote': generate_track_note(company['name'], t, r['title'], r['summary']),
+                'trackWhen': generate_track_when(t, s),
+            })
+        time.sleep(0.5)
 
-function setCompanyFilter(f, el) {
-  companyFilter = f;
-  document.querySelectorAll('.f-btn').forEach(e => e.classList.remove('active'));
-  el.classList.add('active');
-  renderCompanies();
-}
+    # 통합 키워드 검색
+    company_names = [c['name'] for c in COMPANIES]
+    for query in GENERAL_KEYWORDS:
+        print(f"  통합 검색: {query[:45]}")
+        results = fetch_google_news(query, days=14, max_results=5)
+        for r in results:
+            matched = next((n for n in company_names if n.split('/')[0].strip() in r['title'] + r['summary']), None)
+            if not matched:
+                continue
+            fid = make_id(matched, r['title'])
+            if fid in seen_ids:
+                continue
+            seen_ids.add(fid)
+            t = classify_type(r['title'], r['summary'])
+            s = classify_status(r['title'], r['summary'], r['date'])
+            new_findings.append({
+                'id': fid, 'company': matched,
+                'type': t, 'status': s,
+                'title': r['title'], 'summary': r['summary'],
+                'date': r['date'], 'deadline': None, 'url': r['url'],
+                'isNew': True,
+                'trackNote': generate_track_note(matched, t, r['title'], r['summary']),
+                'trackWhen': generate_track_when(t, s),
+            })
+        time.sleep(0.5)
 
-function statusBadge(item) {
-  if (item.status === 'open')   return '<span class="badge badge-open">🟢 모집 중</span>';
-  if (item.status === 'closed') return '<span class="badge badge-closed">🔴 마감</span>';
-  return '';
-}
-function typeBadge(type) {
-  if (type === 'recruit') return '<span class="badge badge-recruit">📢 모집·공모</span>';
-  if (type === 'tender')  return '<span class="badge badge-tender">📑 입찰</span>';
-  return '<span class="badge badge-news">📰 뉴스</span>';
-}
+    # 병합 및 정렬 (open 먼저, 최신순)
+    all_findings = current_findings + new_findings
+    all_findings.sort(key=lambda x: (0 if x['status'] == 'open' else 1, x['date']), reverse=True)
+    # open은 위로, 같은 status 내 최신순이 되도록 재정렬
+    open_items = sorted([f for f in all_findings if f['status'] == 'open'], key=lambda x: x['date'], reverse=True)
+    other_items = sorted([f for f in all_findings if f['status'] != 'open'], key=lambda x: x['date'], reverse=True)
+    all_findings = (open_items + other_items)[:60]
 
-function renderFeed() {
-  const feed = document.getElementById('newsFeed');
-  let data = [...FINDINGS];
-  if (currentTab === 'open')    data = data.filter(f => f.status === 'open');
-  if (currentTab === 'recruit') data = data.filter(f => f.type === 'recruit');
-  if (currentTab === 'track')   data = data.filter(f => f.trackNote);
-  if (currentTab === 'news')    data = data.filter(f => f.type === 'news');
-  data.sort((a,b) => {
-    const order = {open:0, closed:1, news:2};
-    return (order[a.status]||2) - (order[b.status]||2) || (b.isNew?1:0)-(a.isNew?1:0);
-  });
-  document.getElementById('feedCount').textContent = data.length + '건';
-  if (data.length === 0) {
-    feed.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>해당 탭에 수집된 내용이 없습니다.</p></div>`;
-    return;
-  }
-  feed.innerHTML = data.map(f => `
-    <div class="news-item">
-      <div class="news-top">
-        <div class="news-badges">${typeBadge(f.type)}${statusBadge(f)}</div>
-      </div>
-      <div class="news-body">
-        <div class="news-company">${f.isNew ? '<span class="new-dot"></span>' : ''}${f.company}</div>
-        <div class="news-title">${f.title}</div>
-        <div class="news-summary">${f.summary}</div>
-        ${f.trackNote ? `
-        <div class="track-box">
-          <div class="track-label">🔮 추적 가이드</div>
-          <div class="track-text">${f.trackNote}</div>
-          ${f.trackWhen ? `<div class="track-when">⏰ ${f.trackWhen}</div>` : ''}
-        </div>` : ''}
-        <div class="news-meta">
-          <span class="news-date">수집: ${f.date}</span>
-          ${f.deadline
-            ? (f.status === 'open'
-                ? `<span class="deadline-open">마감 ${f.deadline}</span>`
-                : `<span class="deadline-closed">마감 ${f.deadline}</span>`)
-            : ''}
-          ${f.url ? `<a class="news-link" href="${f.url}" target="_blank">🔗 원문</a>` : ''}
-        </div>
-      </div>
-    </div>`).join('');
-}
+    print(f"\n수집 완료: FINDINGS {len(all_findings)}건, 아카이브 {sum(len(w['items']) for w in new_archive)}건")
 
-function renderCompanies() {
-  const q = document.getElementById('companySearch').value.trim();
-  const companiesWithNews = new Set(FINDINGS.map(f => f.company));
-  let list = [...COMPANIES];
-  if (q) list = list.filter(c => c.name.includes(q));
-  if (companyFilter === 'high') list = list.filter(c => c.priority === 'high');
-  if (companyFilter === 'cond') list = list.filter(c => c.priority === 'cond');
-  if (companyFilter === 'news') list = list.filter(c => companiesWithNews.has(c.name));
-  list.sort((a,b) => (companiesWithNews.has(a.name)?0:1)-(companiesWithNews.has(b.name)?0:1));
-  const el = document.getElementById('companyList');
-  el.innerHTML = list.map(c => {
-    const cnt = FINDINGS.filter(f => f.company === c.name).length;
-    const dotCls = c.priority==='high'?'p-high':c.priority==='cond'?'p-cond':'p-low';
-    return `<div class="company-row ${cnt?'has-news':''}" onclick="filterByCompany('${c.name.replace(/'/g,"\\'")}')">
-      <div class="priority-dot ${dotCls}"></div>
-      <div class="company-name-text" title="${c.name}">${c.name}</div>
-      ${cnt ? `<div class="company-news-count">${cnt}</div>` : ''}
-    </div>`;
-  }).join('');
-}
+    # index.html 업데이트
+    findings_json = json.dumps(all_findings, ensure_ascii=False, indent=2)
+    new_findings_block = (
+        f"// FINDINGS_START\n"
+        f"// AUTO-UPDATED: {now.strftime('%Y-%m-%d %H:%M KST')}\n"
+        f"const FINDINGS = {findings_json};\n"
+        f"// FINDINGS_END"
+    )
 
-function filterByCompany(name) {
-  const data = FINDINGS.filter(f => f.company === name);
-  if (!data.length) return;
-  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
-  const feed = document.getElementById('newsFeed');
-  document.getElementById('feedCount').textContent = data.length + '건';
-  feed.innerHTML = data.map(f => `
-    <div class="news-item">
-      <div class="news-top"><div class="news-badges">${typeBadge(f.type)}${statusBadge(f)}</div></div>
-      <div class="news-body">
-        <div class="news-company">${f.company}</div>
-        <div class="news-title">${f.title}</div>
-        <div class="news-summary">${f.summary}</div>
-        ${f.trackNote ? `
-        <div class="track-box">
-          <div class="track-label">🔮 추적 가이드</div>
-          <div class="track-text">${f.trackNote}</div>
-          ${f.trackWhen ? `<div class="track-when">⏰ ${f.trackWhen}</div>` : ''}
-        </div>` : ''}
-        <div class="news-meta">
-          <span class="news-date">수집: ${f.date}</span>
-          ${f.deadline ? `<span class="${f.status==='open'?'deadline-open':'deadline-closed'}">마감 ${f.deadline}</span>` : ''}
-          ${f.url ? `<a class="news-link" href="${f.url}" target="_blank">🔗 원문</a>` : ''}
-        </div>
-      </div>
-    </div>`).join('');
-}
+    archive_json = json.dumps(new_archive, ensure_ascii=False, indent=2)
+    new_archive_block = (
+        f"// ARCHIVE_START\n"
+        f"const ARCHIVE = {archive_json};\n"
+        f"// ARCHIVE_END"
+    )
 
-function updateStats() {
-  document.getElementById('sOpen').textContent    = FINDINGS.filter(f => f.status==='open').length;
-  document.getElementById('sRecruit').textContent = FINDINGS.filter(f => f.type==='recruit').length;
-  document.getElementById('sTrack').textContent   = FINDINGS.filter(f => f.trackNote).length;
-  document.getElementById('sNews').textContent    = FINDINGS.filter(f => f.type==='news').length;
-  document.getElementById('lastScan').textContent = FINDINGS.length > 0
-    ? FINDINGS.reduce((a,b)=>a.date>b.date?a:b).date : '아직 없음';
-}
+    html = re.sub(r'// FINDINGS_START[\s\S]*?// FINDINGS_END', new_findings_block, html)
+    html = re.sub(r'// ARCHIVE_START[\s\S]*?// ARCHIVE_END', new_archive_block, html)
 
-updateStats();
-renderFeed();
-renderCompanies();
-</script>
-</body>
-</html>
+    with open('index.html', 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    print("index.html 업데이트 완료 ✓")
+
+if __name__ == '__main__':
+    run()
