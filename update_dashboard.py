@@ -60,18 +60,54 @@ COMPANIES = [
 
 # ── 검색 키워드 ──────────────────────────────────────────────────────────
 COMPANY_KEYWORDS = [
-    "사회공헌 운영기관 모집",
-    "사회공헌 수행기관 공모",
-    "교육 협력기관 모집",
+    "교육사업 운영기관 모집",
+    "인재육성 사업 공모",
+    "학습지원 수행기관 모집",
+    "교육 위탁운영 공모",
+    "역량강화 교육 협력기관",
+    "멘토링 사업 운영기관 공모",
 ]
 
 GENERAL_KEYWORDS = [
-    "기업재단 교육 운영기관 모집 2026",
-    "사회공헌 수행기관 공모 2026",
-    "취약계층 교육 협력기관 모집",
-    "청소년 교육 위탁운영 공모 기업재단",
-    "ESG 교육사업 운영기관 모집",
+    "취약계층 교육사업 운영기관 모집 2026",
+    "디지털교육 격차해소 수행기관 공모",
+    "청소년 인재육성 교육 협력기관 모집",
+    "AI 교육 취약계층 지원 사업 공모",
+    "평생학습 위탁운영 기업재단 공모 2026",
+    "교육격차 해소 사업 운영기관 모집",
 ]
+
+# ── 관련성 필터 ───────────────────────────────────────────────────────────
+# 최소 하나 포함되어야 수집 (교육·인재육성 관련)
+INCLUDE_KEYWORDS = [
+    '교육', '인재육성', '멘토링', '격차해소', '학습지원', '역량강화', '평생학습',
+    '학습', '훈련', '코딩', 'AI교육', 'AI 교육', '디지털교육', '디지털 교육',
+    '취약계층', '교육격차', '청소년 교육', '성인교육', '직업교육',
+    '수행기관', '운영기관', '협력기관', '위탁운영', '교육사업', '장학',
+    '인재 양성', '능력개발', '직무교육', '리터러시',
+]
+
+# 하나라도 포함되면 제외
+EXCLUDE_KEYWORDS = [
+    '가전', '구독', '여행', '봉사단', '인턴', '채용', '취업', '입사지원',
+    '구매', '할인', '이벤트', '경품', '추첨', '공연', '전시', '박람회',
+    '주주', '투자', '주가', '실적', '매출', '영업이익', '배당',
+    '결혼', '출산', '맛집', '레저', '관광', '스포츠 후원', '헬스케어',
+    '봉사활동 모집', '자원봉사',
+]
+
+def is_relevant(title, summary):
+    """교육/인재육성 관련 여부 판단"""
+    text = title + ' ' + summary
+    # 제외 키워드 우선 체크
+    for kw in EXCLUDE_KEYWORDS:
+        if kw in text:
+            return False
+    # 포함 키워드 최소 1개 필요
+    for kw in INCLUDE_KEYWORDS:
+        if kw in text:
+            return True
+    return False
 
 # ── 헬퍼: 주간 범위 ────────────────────────────────────────────────────
 def get_week_range(date_str):
@@ -237,6 +273,9 @@ def run():
             print(f"  검색: {query[:45]}")
             results = fetch_google_news(query, days=45, max_results=3)
             for r in results:
+                if not is_relevant(r['title'], r['summary']):
+                    print(f"    제외: {r['title'][:40]}")
+                    continue
                 fid = make_id(company['name'], r['title'])
                 if fid in seen_ids:
                     continue
@@ -257,9 +296,12 @@ def run():
 
     # 조건부 기업 통합 검색
     for company in [c for c in COMPANIES if c['priority'] == 'cond']:
-        query = f"{company['name']} 사회공헌 교육 모집 2026"
+        query = f"{company['name']} 교육사업 인재육성 모집 2026"
         results = fetch_google_news(query, days=30, max_results=2)
         for r in results:
+            if not is_relevant(r['title'], r['summary']):
+                print(f"    제외: {r['title'][:40]}")
+                continue
             fid = make_id(company['name'], r['title'])
             if fid in seen_ids:
                 continue
@@ -283,6 +325,9 @@ def run():
         print(f"  통합 검색: {query[:45]}")
         results = fetch_google_news(query, days=14, max_results=5)
         for r in results:
+            if not is_relevant(r['title'], r['summary']):
+                print(f"    제외: {r['title'][:40]}")
+                continue
             matched = next((n for n in company_names if n.split('/')[0].strip() in r['title'] + r['summary']), None)
             if not matched:
                 continue
