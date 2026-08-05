@@ -10654,7 +10654,7 @@ function renderArea() {
   }
 
   const savedKey = localStorage.getItem('anthropic_api_key') || '';
-  const savedModel = localStorage.getItem('anthropic_model') || 'claude-sonnet-4-6';
+  const savedModel = localStorage.getItem('anthropic_model') || 'claude-sonnet-4-5';
   const news = c._news || null;
 
   // 데이터 출처 판별 (새 플래그 우선, 없으면 필드로 추론)
@@ -11033,7 +11033,7 @@ function renderArea() {
       <div class="api-row">
         <span class="api-label">모델</span>
         <select class="api-select" id="modelSelect">
-          <option value="claude-sonnet-4-6" ${savedModel === 'claude-sonnet-4-6' ? 'selected' : ''}>claude-sonnet-4-6 (추천)</option>
+          <option value="claude-sonnet-4-5" ${savedModel === 'claude-sonnet-4-5' ? 'selected' : ''}>claude-sonnet-4-5 (추천)</option>
           <option value="claude-opus-4-5" ${savedModel === 'claude-opus-4-5' ? 'selected' : ''}>claude-opus-4-5</option>
           <option value="claude-haiku-4-5-20251001" ${savedModel === 'claude-haiku-4-5-20251001' ? 'selected' : ''}>claude-haiku-4-5 (빠름)</option>
         </select>
@@ -11108,7 +11108,7 @@ async function generate() {
     return;
   }
 
-  const model = document.getElementById('modelSelect')?.value || localStorage.getItem('anthropic_model') || 'claude-sonnet-4-6';
+  const model = document.getElementById('modelSelect')?.value || localStorage.getItem('anthropic_model') || 'claude-sonnet-4-5';
   const c = selectedCompany;
 
   // Save key for next time
@@ -11134,10 +11134,11 @@ async function generate() {
     activeTab = 'strategy';
 
   } catch (err) {
-    results.strategy = `⚠️ 오류가 발생했습니다.\n\n${err.message}\n\nAPI Key가 올바른지, 모델명이 정확한지 확인해주세요.`;
-    results.phone = '';
-    results.email = '';
+    results.strategy = `⚠️ 오류가 발생했습니다.\n\n오류 내용: ${err.message}\n\n확인사항:\n1. API Key가 올바르게 입력·저장됐는지 확인\n2. Anthropic Console에서 크레딧($)이 있는지 확인\n3. 페이지를 새로고침하고 다시 시도`;
+    results.phone = '—';
+    results.email = '—';
     activeTab = 'strategy';
+    console.error('Claude API 오류:', err);
   }
 
   isLoading = false;
