@@ -9,12 +9,14 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f6fb; color: #1a1a2e; font-size: 14px; display: flex; flex-direction: column; }
-
   .header { background: #fff; border-bottom: 1px solid #e5e8f0; padding: 10px 24px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .header h1 { font-size: 16px; font-weight: 700; }
-  .header .scan-info { margin-left: auto; font-size: 12px; color: #aaa; }
+  .header .scan-info { font-size: 12px; color: #aaa; }
   .header .scan-info span { color: #3b82f6; font-weight: 600; }
-
+  .nav-tabs { display: flex; gap: 4px; margin-left: auto; }
+  .nav-tab { padding: 5px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #e5e8f0; background: #f4f6fb; color: #666; text-decoration: none; display: flex; align-items: center; gap: 5px; transition: all 0.15s; }
+  .nav-tab:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+  .nav-tab.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
   .stats { display: flex; gap: 10px; padding: 10px 24px 0; flex-shrink: 0; }
   .stat { background: #fff; border-radius: 10px; padding: 10px 16px; flex: 1; border: 1px solid #e5e8f0; }
   .stat .n { font-size: 22px; font-weight: 800; line-height: 1; }
@@ -24,18 +26,14 @@
   .stat.purple .n { color: #8b5cf6; }
   .stat.blue .n { color: #3b82f6; }
   .stat.green .n { color: #22c55e; }
-
   .layout { display: grid; grid-template-columns: 1fr 280px; gap: 12px; padding: 10px 24px 12px; flex: 1; min-height: 0; }
-
   .panel { background: #fff; border-radius: 10px; border: 1px solid #e5e8f0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   .panel-head { padding: 10px 16px; border-bottom: 1px solid #f0f2f8; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .panel-head h2 { font-size: 13px; font-weight: 700; }
   .panel-head .count { margin-left: auto; font-size: 11px; background: #f0f4ff; color: #3b82f6; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-
   .tabs { display: flex; padding: 0 16px; border-bottom: 1px solid #f0f2f8; flex-shrink: 0; overflow-x: auto; }
   .tab { padding: 8px 12px; font-size: 12px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; white-space: nowrap; }
   .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 700; }
-
   .news-list { flex: 1; overflow-y: auto; min-height: 0; }
   .news-item { padding: 12px 16px; border-bottom: 1px solid #f5f6fa; }
   .news-item:last-child { border-bottom: none; }
@@ -62,18 +60,15 @@
   .deadline-closed { font-size: 11px; background: #f1f5f9; color: #94a3b8; padding: 2px 7px; border-radius: 4px; font-weight: 600; text-decoration: line-through; }
   .new-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ef4444; margin-right: 5px; vertical-align: middle; animation: pulse 1.5s infinite; }
   @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
-
   .archive-week { border-bottom: 1px solid #f0f2f8; }
   .archive-week:last-child { border-bottom: none; }
   .archive-week-header { padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; background: #f8f9ff; font-size: 12px; font-weight: 700; color: #374151; user-select: none; }
   .archive-week-header:hover { background: #eef2ff; }
   .week-count { font-size: 11px; background: #e0e7ff; color: #4338ca; padding: 1px 7px; border-radius: 10px; font-weight: 700; }
   .toggle-icon { margin-left: auto; font-size: 11px; color: #aaa; }
-
   .empty-state { padding: 40px 24px; text-align: center; color: #bbb; }
   .empty-state .icon { font-size: 28px; margin-bottom: 8px; }
   .empty-state p { font-size: 13px; line-height: 1.6; }
-
   .search-wrap { padding: 8px 14px; border-bottom: 1px solid #f0f2f8; flex-shrink: 0; }
   .search-input { width: 100%; padding: 6px 10px; border: 1px solid #e5e8f0; border-radius: 7px; font-size: 12px; outline: none; }
   .search-input:focus { border-color: #3b82f6; }
@@ -94,13 +89,15 @@
 </style>
 </head>
 <body>
-
 <div class="header">
   <span style="font-size:18px">📡</span>
-  <h1>CSR 공고 모니터링</h1>
-  <div class="scan-info">마지막 수집: <span id="lastScan">—</span></div>
+  <h1>KMA 임팩트 비즈니스</h1>
+  <div class="scan-info" style="margin-left:12px">마지막 수집: <span id="lastScan">—</span></div>
+  <div class="nav-tabs">
+    <a class="nav-tab active" href="index.html">📡 CSR 모니터링</a>
+    <a class="nav-tab" href="proposal.html">✨ 맞춤 제안 전략</a>
+  </div>
 </div>
-
 <div class="stats">
   <div class="stat red"><div class="n" id="sOpen">0</div><div class="l">모집 진행 중</div></div>
   <div class="stat orange"><div class="n" id="sRecruit">0</div><div class="l">모집·공모 발견</div></div>
@@ -108,7 +105,6 @@
   <div class="stat blue"><div class="n" id="sNews">0</div><div class="l">뉴스·소식</div></div>
   <div class="stat green"><div class="n" id="sTotal">0</div><div class="l">모니터링 기업</div></div>
 </div>
-
 <div class="layout">
   <div class="panel">
     <div class="panel-head">
@@ -125,7 +121,6 @@
     </div>
     <div class="news-list" id="newsFeed"></div>
   </div>
-
   <div class="panel">
     <div class="panel-head"><span>🏢</span><h2>모니터링 기업</h2></div>
     <div class="search-wrap">
@@ -140,7 +135,6 @@
     <div class="company-list" id="companyList"></div>
   </div>
 </div>
-
 <script>
 const COMPANIES = [
   {name:"삼성전자"},{name:"LG전자"},{name:"네이버 커넥트재단"},{name:"카카오임팩트 재단"},
@@ -193,885 +187,35 @@ const COMPANIES = [
   {name:"대웅제약 / 대웅재단"},{name:"KCC글라스"},{name:"동서식품"},{name:"자생의료재단"},
   {name:"한솔교육희망재단"},{name:"다음세대재단"},
 ];
-
 // FINDINGS_START
-// AUTO-UPDATED: 2026-08-05 01:20 KST
-const FINDINGS = [
-  {
-    "id": "78200db6",
-    "company": "컴투스",
-    "type": "news",
-    "status": "open",
-    "title": "제천시지역사회보장협의체, 올봄사업 돌봄 종사자 역량강화 교육 실시",
-    "summary": "제천시지역사회보장협의체, 올봄사업 돌봄 종사자 역량강화 교육 실시&nbsp;&nbsp;웹이코노미",
-    "date": "2026-08-05",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMickFVX3lxTFB5SldZbHNEdGJLSmJHVXBaNlRaQ09rMlNRWjVyMUtfWnlrYTVmX2ZhTERuaTN6WjFxZ25wRER5WGJfaEhYanM2VlF2U3dJakpTWThaQzJSOTl5S3NMUWU0aEdkS3RFT010cUUyajlpTmptQQ?oc=5",
-    "isNew": true,
-    "trackNote": "컴투스 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "51f29026",
-    "company": "현대건설",
-    "type": "news",
-    "status": "open",
-    "title": "제천시지역사회보장협의체, 올봄사업 돌봄 종사자 역량강화 교육 실시",
-    "summary": "제천시지역사회보장협의체, 올봄사업 돌봄 종사자 역량강화 교육 실시&nbsp;&nbsp;웹이코노미",
-    "date": "2026-08-05",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMickFVX3lxTFB5SldZbHNEdGJLSmJHVXBaNlRaQ09rMlNRWjVyMUtfWnlrYTVmX2ZhTERuaTN6WjFxZ25wRER5WGJfaEhYanM2VlF2U3dJakpTWThaQzJSOTl5S3NMUWU0aEdkS3RFT010cUUyajlpTmptQQ?oc=5",
-    "isNew": true,
-    "trackNote": "현대건설 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4e928971",
-    "company": "이마트",
-    "type": "news",
-    "status": "open",
-    "title": "제천시지역사회보장협의체, 올봄사업 돌봄 종사자 역량강화 교육 실시",
-    "summary": "제천시지역사회보장협의체, 올봄사업 돌봄 종사자 역량강화 교육 실시&nbsp;&nbsp;웹이코노미",
-    "date": "2026-08-05",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMickFVX3lxTFB5SldZbHNEdGJLSmJHVXBaNlRaQ09rMlNRWjVyMUtfWnlrYTVmX2ZhTERuaTN6WjFxZ25wRER5WGJfaEhYanM2VlF2U3dJakpTWThaQzJSOTl5S3NMUWU0aEdkS3RFT010cUUyajlpTmptQQ?oc=5",
-    "isNew": true,
-    "trackNote": "이마트 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "16f6a4be",
-    "company": "토스",
-    "type": "recruit",
-    "status": "open",
-    "title": "광주 동구, 지역 미래 이끌 2026년도 인재육성 장학생 81명 모집 나선다 > 뉴스",
-    "summary": "광주 동구, 지역 미래 이끌 2026년도 인재육성 장학생 81명 모집 나선다 > 뉴스&nbsp;&nbsp;더코리아",
-    "date": "2026-08-05",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiQ0FVX3lxTFA0TFlFZ1VEZERmVHo3aEpDdGlOTnE3bk4ycTVULVQyTllHNGw1RU1TQjRGRl9DZFBPWUN6N0hQUGJNQTQ?oc=5",
-    "isNew": true,
-    "trackNote": "연간 사업 운영기관 모집 공고. 이 회차 마감 후 다음 모집은 약 10~12개월 후 예상. 현 수행기관 계약 종료 3~4개월 전 KMA 제안서 선제 발송 권장. 토스 담당자 컨텍 유지 필요.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "eb254194",
-    "company": "삼성전자",
-    "type": "news",
-    "status": "open",
-    "title": "강진군, 공동육아 공간 확충·장학생 148명 선발",
-    "summary": "강진군, 공동육아 공간 확충·장학생 148명 선발&nbsp;&nbsp;더쎈뉴스",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE9aU0tsdlFZSnlKQmhpVDg0d1c1cFFoYk9scWJVbklzcWNWcGJOMktTcGJYVWxUWUtqemJtNXl0aWt0UVVST2NxVDBONUdzSXVlaTJMNWdFRDhFb0dPWG5UU3kydmFqLVE?oc=5",
-    "isNew": true,
-    "trackNote": "삼성전자 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "9255d67b",
-    "company": "한국전력공사",
-    "type": "news",
-    "status": "open",
-    "title": "대구교대, ‘교원양성기관 교육과정 개발 지원사업’선정",
-    "summary": "대구교대, ‘교원양성기관 교육과정 개발 지원사업’선정&nbsp;&nbsp;경북구미신문",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE04M2YwNWM3MWF6NUZ6VjBHNUZ1SW9OSnlyZzJyZUNXSFI0ZldBR2YweFl1Ti1TRnVSeGZvOWN1M2ZYM3Z6ellnbXFPSVdVRWxHMXUyYy1IaDFsWGxWV3Z6MS0zb1YzanQ4THc?oc=5",
-    "isNew": true,
-    "trackNote": "한국전력공사 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "74488f0c",
-    "company": "스마일게이트 희망스튜디오 / 퓨처랩",
-    "type": "news",
-    "status": "open",
-    "title": "스마일게이트 퓨처랩, 성남교육지원청과 미래교육 협력…디지털 메이커 교육 본격 운영",
-    "summary": "스마일게이트 퓨처랩, 성남교육지원청과 미래교육 협력…디지털 메이커 교육 본격 운영&nbsp;&nbsp;청년일보",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE9ZZW9KUlF2WFRkcHlWT0lrNWJSWE9nUXhiS3B4Q2xsSWNxR3ZNU1JHM2tETGhOY21USTlwVHdQRGR6b25Zcy0tSjBXZHB6TExqMEh0RC0zNzdFNU92ZHVuejA5OXJadnFfbmc?oc=5",
-    "isNew": true,
-    "trackNote": "스마일게이트 희망스튜디오 / 퓨처랩 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "06cceb13",
-    "company": "넷마블문화재단",
-    "type": "news",
-    "status": "open",
-    "title": "교육부, 일자리 밖 청년 직무 교육 강화…‘인재양성 부트캠프’ 추진",
-    "summary": "교육부, 일자리 밖 청년 직무 교육 강화…‘인재양성 부트캠프’ 추진&nbsp;&nbsp;라이센스뉴스",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBIMUFPbk41X1V5dTV3VjZRb1JCSXdJaGpFVjhRc29uQ3llS080YVlJbEIzMjJvcEx1MWp3MjNaUEVBQVhzeHRxZDRxSER6X0pYTmtDUkk5aHhjS2F3X3JlaGRnWG5jQWpXSGtr?oc=5",
-    "isNew": true,
-    "trackNote": "넷마블문화재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "2fdbc5c0",
-    "company": "BNK금융그룹 / BNK부산은행",
-    "type": "news",
-    "status": "open",
-    "title": "강진군, 공동육아 공간 확충·장학생 148명 선발",
-    "summary": "강진군, 공동육아 공간 확충·장학생 148명 선발&nbsp;&nbsp;더쎈뉴스",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTFBnWjEyemZzR0ZCM0lnQ1JQNXU0eDZRZUxJVU1XLXV0M3FaZ1Jwc1NJaW03anhlR29mbTVjZ3RBLWlkaFI2V3R2Vm9FMkpjUHdudUxzTjU4OXplY1pQNlFqbFdyRmtrY29o?oc=5",
-    "isNew": true,
-    "trackNote": "BNK금융그룹 / BNK부산은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "db6f53f1",
-    "company": "미래엔",
-    "type": "news",
-    "status": "open",
-    "title": "대구가톨릭대, 우즈벡 청소년 교류단 방문…글로벌 창업교육 협력 논의",
-    "summary": "대구가톨릭대, 우즈벡 청소년 교류단 방문…글로벌 창업교육 협력 논의&nbsp;&nbsp;네이트",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE9jdGtydTM2WjVkRmd3RE5BZEVJY1dfS1F3S2tYcm15WTNQM2lWU0hrcExHWHplMEsyVXktVXR4U2s0eVpaZnlLbkxhRDBDVERtQmtYbXBWcXNERVlKSUlkQw?oc=5",
-    "isNew": true,
-    "trackNote": "미래엔 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "10f1efe8",
-    "company": "SK하이닉스",
-    "type": "news",
-    "status": "open",
-    "title": "강진군, 공동육아 공간 확충·장학생 148명 선발",
-    "summary": "강진군, 공동육아 공간 확충·장학생 148명 선발&nbsp;&nbsp;더쎈뉴스",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE9aU0tsdlFZSnlKQmhpVDg0d1c1cFFoYk9scWJVbklzcWNWcGJOMktTcGJYVWxUWUtqemJtNXl0aWt0UVVST2NxVDBONUdzSXVlaTJMNWdFRDhFb0dPWG5UU3kydmFqLVE?oc=5",
-    "isNew": true,
-    "trackNote": "SK하이닉스 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "c0e96eef",
-    "company": "대한항공",
-    "type": "news",
-    "status": "open",
-    "title": "제주대학교 RISE사업단, 반도체 융합트랙 연계 '글로벌 통합 실습 교육 프로그램' 운영",
-    "summary": "제주대학교 RISE사업단, 반도체 융합트랙 연계 '글로벌 통합 실습 교육 프로그램' 운영&nbsp;&nbsp;지금제주",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE5jenUxVjgxTXRfRS1USWdLYnpzdGlWX1hRbTlOMWRxTWZqRnI0UDRaVG5qWFVDQTBmSkpsektiWnFrZ05YWWRleURYYWxqd2pHc1U3MnM4ZUtFSFBXVkFmWEJwTzRxYzRwM1FxeGpR?oc=5",
-    "isNew": true,
-    "trackNote": "대한항공 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "896cd3e6",
-    "company": "SK브로드밴드",
-    "type": "news",
-    "status": "open",
-    "title": "함께 잇고, 함께 키우는 경주교육 학생맞춤통합지원으로 완성하다",
-    "summary": "함께 잇고, 함께 키우는 경주교육 학생맞춤통합지원으로 완성하다&nbsp;&nbsp;skbnews.kr",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFBaXzlmVkhoMXlYSlFESjJKUjdQRHFkQ1ZrTUlUaFJmSUpJTHI2dG5ZYmN4VjdsblVKMHByVjhnMjFhQW1uYUtkNTBmTnU0dTFhOUpCakRmdDQ?oc=5",
-    "isNew": true,
-    "trackNote": "SK브로드밴드 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "8f51763a",
-    "company": "컴투스",
-    "type": "news",
-    "status": "open",
-    "title": "교육부, 일자리 밖 청년 직무 교육 강화…‘인재양성 부트캠프’ 추진",
-    "summary": "교육부, 일자리 밖 청년 직무 교육 강화…‘인재양성 부트캠프’ 추진&nbsp;&nbsp;라이센스뉴스",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBIMUFPbk41X1V5dTV3VjZRb1JCSXdJaGpFVjhRc29uQ3llS080YVlJbEIzMjJvcEx1MWp3MjNaUEVBQVhzeHRxZDRxSER6X0pYTmtDUkk5aHhjS2F3X3JlaGRnWG5jQWpXSGtr?oc=5",
-    "isNew": true,
-    "trackNote": "컴투스 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "867a7c15",
-    "company": "펄어비스",
-    "type": "news",
-    "status": "open",
-    "title": "경주교육지원청, 학생맞춤형통합지원 역량 강화 연수 실시",
-    "summary": "경주교육지원청, 학생맞춤형통합지원 역량 강화 연수 실시&nbsp;&nbsp;다경뉴스",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5ZVWpmaUloZ0J6Y2NLX2hieHkyRTVsQUZyTXJXcWZWVHhJckpOZkNZVnBZUTdYUG5pU1gtQXMyMWV1TzJNbDFRVXRoN09vM2tQ?oc=5",
-    "isNew": true,
-    "trackNote": "펄어비스 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "6435aa34",
-    "company": "현대모비스",
-    "type": "news",
-    "status": "open",
-    "title": "광명교육청, 신규 공무원 조직 적응 지원 도교육청·직속기관, 현장 중심 멘토링 프로그램 운영",
-    "summary": "광명교육청, 신규 공무원 조직 적응 지원 도교육청·직속기관, 현장 중심 멘토링 프로그램 운영&nbsp;&nbsp;오토투데이",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE5YLVBGRnNUa3A4OHJOUktBVWUzQ3ZkZ2QxUEIxNVFzTEJ5aXBiQ1V5Q2xqQkY3b3hnSXYtZlFMQlpfbF9TclkwUHI3VDZzLVRUenBockV5dzBJdUQ5aEpfSGZCeEdzaG5TeHRmOVBUQQ?oc=5",
-    "isNew": true,
-    "trackNote": "현대모비스 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4c9bd384",
-    "company": "현대해상",
-    "type": "news",
-    "status": "open",
-    "title": "과학기술정보통신부, 신한금융과 취약계층 ‘AI·디지털 역량’ 키운다",
-    "summary": "과학기술정보통신부, 신한금융과 취약계층 ‘AI·디지털 역량’ 키운다&nbsp;&nbsp;한국보험신문",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBlLWJjSHZHbE9ENXJlVU9sMERheVdvNGtvLV94ekFnaUZyMTB5MmhtT1JDTkpCcDVEUm5TRjdUeGJLR0liNG9PNkUxQXJFMnRQQ3NrdFpBWE5ZMTNXYk5VRENiSExUYm5Yc0Uw0gFvQVVfeXFMUGdtRG1vdDNxNjRvRmZfLXBaalhkeUFSY1FuWDJnTGl6VnpydlFWeWRnVlREUnZCMnlRTEZWWG5uMFY2azl2S041QVh0OW05Z0g5WU9xQkgwbndGanFqUTRNSjNKbkFBcFdnbmtpR2hV?oc=5",
-    "isNew": true,
-    "trackNote": "현대해상 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "6de05da9",
-    "company": "천재교육",
-    "type": "news",
-    "status": "open",
-    "title": "[교육 트렌드] 창단 10주년 서울학생필하모닉, 신청사에 희망을 울리다 外",
-    "summary": "[교육 트렌드] 창단 10주년 서울학생필하모닉, 신청사에 희망을 울리다 外&nbsp;&nbsp;베이비뉴스",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE1md3YwUklWVzh6WUR6bnVzdUFDX19iakxfcVJNVXhYWndHeTFwSFZpbXZTNjBvSUtOUVExM0U2NlBYTDBFYjljVFZwWWw4bTB1YTFfalZEME9Kcks1N05qOGgzaHdtcUhpUXBmMg?oc=5",
-    "isNew": true,
-    "trackNote": "천재교육 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "3e59804f",
-    "company": "다음세대재단",
-    "type": "news",
-    "status": "open",
-    "title": "[ESG 트렌드] 공무원연금공단, 지역 아동 대상 체험형 ESG 교육 실시 外",
-    "summary": "[ESG 트렌드] 공무원연금공단, 지역 아동 대상 체험형 ESG 교육 실시 外&nbsp;&nbsp;v.daum.net",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE0ybkl0M0tQLW42bFl6azk3Z3VWODloSkFzaXBxYU04a0h3Wll4a29iblZSd2ZpMkVKS1hra0dzOU9fQnJES21VdE9WTC1rWjZmS3RyLQ?oc=5",
-    "isNew": true,
-    "trackNote": "다음세대재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "2ceff2cc",
-    "company": "한국전력공사",
-    "type": "news",
-    "status": "open",
-    "title": "'경북도-지역대' 대구경북 성장엔진 \"인재육성 국비확보 총력\"",
-    "summary": "'경북도-지역대' 대구경북 성장엔진 \"인재육성 국비확보 총력\"&nbsp;&nbsp;경북구미신문",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5RNC15QjFWUWUxNnJyc1NXTjF1R1B3LXg1MDVadHRlemw1ODIyQXJxZ1NaUW9TVXhlSkRPYjdVWExKN2Iwd056NFFCR2N1RmNZRUpHMk9HZ21SR3BwbXRUNWgweVpYYS1Kb2c?oc=5",
-    "isNew": true,
-    "trackNote": "한국전력공사 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "61e0d0e7",
-    "company": "LG디스플레이",
-    "type": "news",
-    "status": "open",
-    "title": "'경북도-지역대' 대구경북 성장엔진 \"인재육성 국비확보 총력\"",
-    "summary": "'경북도-지역대' 대구경북 성장엔진 \"인재육성 국비확보 총력\"&nbsp;&nbsp;경북구미신문",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5RNC15QjFWUWUxNnJyc1NXTjF1R1B3LXg1MDVadHRlemw1ODIyQXJxZ1NaUW9TVXhlSkRPYjdVWExKN2Iwd056NFFCR2N1RmNZRUpHMk9HZ21SR3BwbXRUNWgweVpYYS1Kb2c?oc=5",
-    "isNew": true,
-    "trackNote": "LG디스플레이 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "2e1b72ef",
-    "company": "롯데카드",
-    "type": "news",
-    "status": "open",
-    "title": "'경북도-지역대' 대구경북 성장엔진 \"인재육성 국비확보 총력\"",
-    "summary": "'경북도-지역대' 대구경북 성장엔진 \"인재육성 국비확보 총력\"&nbsp;&nbsp;경북구미신문",
-    "date": "2026-08-04",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5RNC15QjFWUWUxNnJyc1NXTjF1R1B3LXg1MDVadHRlemw1ODIyQXJxZ1NaUW9TVXhlSkRPYjdVWExKN2Iwd056NFFCR2N1RmNZRUpHMk9HZ21SR3BwbXRUNWgweVpYYS1Kb2c?oc=5",
-    "isNew": true,
-    "trackNote": "롯데카드 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "eb9a8b7c",
-    "company": "기아",
-    "type": "recruit",
-    "status": "open",
-    "title": "인천 검단구, 어린이·사회복지급식센터 운영기관 공모",
-    "summary": "인천 검단구, 어린이·사회복지급식센터 운영기관 공모&nbsp;&nbsp;매일일보",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE81VWZzc0dGX1dEYTBNbjdfWWNrd09MODZtcHFPTXpGVXVXcmhPaEY3YTNqZmFsUTRJTnZrSmRlZjNQdk9CNFFyRTZCSnlZbndIMGdtOG53NjZXVFpWMlBZOEcyLWo?oc=5",
-    "isNew": true,
-    "trackNote": "기아 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "674b8b54",
-    "company": "NH농협은행",
-    "type": "news",
-    "status": "open",
-    "title": "제주대학교 제주지역경제교육센터, 2025년 2차 실무협의회 개최",
-    "summary": "제주대학교 제주지역경제교육센터, 2025년 2차 실무협의회 개최&nbsp;&nbsp;뉴스N제주",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMilwFBVV95cUxObUFjSjNCZ2lDLTlUanlfUEhQYVdFcHRVa2VjemVrendhc2pTT01nZmdEb1pqSmx5YWt6NFVTaDg4UzZZM0RjT0xuckl5djZZc2VveTYwcHI0X21vc1BoWnJCbWpxQXBYaWMtRjliOGM5WDJVX2ZPZ1lpUUZ5ZXFUZzJGWGN5TFB5SWI1MUpjLU15eWRVWmZJ?oc=5",
-    "isNew": true,
-    "trackNote": "NH농협은행 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "b53eeed8",
-    "company": "미래엔",
-    "type": "news",
-    "status": "open",
-    "title": "안성교육지원청, 스타필드 안성서 '모두의 AI 스타트업' 학생 주도 프로그램 운영",
-    "summary": "안성교육지원청, 스타필드 안성서 '모두의 AI 스타트업' 학생 주도 프로그램 운영&nbsp;&nbsp;v.daum.net",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE8yOGtIQWl1c1FIZlFfWFFJLUhmZEttdTdqVkpyM0Rrd0xQNnBSUGtXS1Q3eS1zZTcwMUY3M29wcDBMZHlhY2h3eDZnZG5WOWM?oc=5",
-    "isNew": true,
-    "trackNote": "미래엔 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "84c4e18d",
-    "company": "대상문화재단",
-    "type": "recruit",
-    "status": "open",
-    "title": "\"장학금이 바꾼 인생을 들려주세요\"… 보성군장학재단 수기 공모전 개최",
-    "summary": "\"장학금이 바꾼 인생을 들려주세요\"… 보성군장학재단 수기 공모전 개최&nbsp;&nbsp;전남매거진",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE1CNjA3WEdtVUhncWRTN3lYTzVJdmk1ZXhub01OTnE0a0hsZ0Z3TTUtUzJDdHE5X0hGRHhaazdnRW1JRkN4THhOREszLXhpMXREVE1FTHpsRHpObmdRdDZUNUJR?oc=5",
-    "isNew": true,
-    "trackNote": "대상문화재단 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "b3e51de7",
-    "company": "야놀자",
-    "type": "recruit",
-    "status": "open",
-    "title": "용산구, 텃발에서 노는 어린이 생태 환경교육 ‘자연아, 놀자!’ 모집",
-    "summary": "용산구, 텃발에서 노는 어린이 생태 환경교육 ‘자연아, 놀자!’ 모집&nbsp;&nbsp;서울Pn",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTFA3N3c2QnI4MExZOEJGbUItaFpEOUlUSHJnal94SENndkczdTRMaWJwUDhRRlV3clNRaWt1UEJjTW5rYnVQUnllQXdNRlowZDNwOHdGWkExN3FJZ3Y4d25oLWMzMWM1ZE9EM3c?oc=5",
-    "isNew": true,
-    "trackNote": "야놀자 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "99254e3e",
-    "company": "SK텔레콤",
-    "type": "news",
-    "status": "open",
-    "title": "SKT-순천향대, ‘디지털새싹’에 ‘AI 그림일기’ 제공⋯ “교육 현장 AX·미래 인재 육성”",
-    "summary": "SKT-순천향대, ‘디지털새싹’에 ‘AI 그림일기’ 제공⋯ “교육 현장 AX·미래 인재 육성”&nbsp;&nbsp;viva100.com",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9reGlhTUJTamVTazZnQTlHR0x1YXcwSFlLcXVNQmRlVll1YVBRaEhpVWlQYmh0MFBQdGJYOTNWSVFEOEZ4Y0ZUM2dLTUF2bDREUmpUUEx5WWVDQQ?oc=5",
-    "isNew": true,
-    "trackNote": "SK텔레콤 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "6fe5ac91",
-    "company": "SK텔레콤",
-    "type": "news",
-    "status": "open",
-    "title": "SKT·순천향대, ‘AI 그림일기’로 초·중·고 AI 교육 확대",
-    "summary": "SKT·순천향대, ‘AI 그림일기’로 초·중·고 AI 교육 확대&nbsp;&nbsp;e4ds news",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE45SHlabXJwN3JNZERBVm5pY0FyUURpVEo5VVBYckN6Q2tPWEg3Y05TcHRFUUFIeUFfcE8wVWt3Q1hoUW11ODJEUy1FUG40TmFyUkg2dEg3QjNsVXBtSHlSeGxR?oc=5",
-    "isNew": true,
-    "trackNote": "SK텔레콤 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "baf912bc",
-    "company": "SK텔레콤",
-    "type": "news",
-    "status": "open",
-    "title": "SKT, 순천향대와 `AI 그림일기`로 교육 현장 AX 이끌고 미래 인재 육성 나선다",
-    "summary": "SKT, 순천향대와 `AI 그림일기`로 교육 현장 AX 이끌고 미래 인재 육성 나선다&nbsp;&nbsp;서남투데이",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE5GWHBXN1JMU1hpbEZWV3AxYTlUSWw2aVRGaUVvWFkyOVhyRTBFYjNFM2ZuSzhKYlNGMnlHUnBiZlRWalVyaHEyeUdwOVF4czdsVFNGNGxWak0wZw?oc=5",
-    "isNew": true,
-    "trackNote": "SK텔레콤 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "ed591cc9",
-    "company": "펄어비스",
-    "type": "recruit",
-    "status": "open",
-    "title": "용산구, 어린이 생태 환경교육 '자연아, 놀자! 텃밭놀이터' 하반기 참여기관 모집",
-    "summary": "용산구, 어린이 생태 환경교육 '자연아, 놀자! 텃밭놀이터' 하반기 참여기관 모집&nbsp;&nbsp;웹이코노미",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE9iQ21pczVfNXU0MVFRSVRIYXlsUGhicDlObGhOYXByWmhiN0JwTzZ4VW96cldKckJNMFVybjVzWW5wS2FrQmNRS2pkUWd2TFk4anRVcEJiTXJsZWtBZkxtbldEU2ZJNS05QnRRWnBsNkpFZw?oc=5",
-    "isNew": true,
-    "trackNote": "펄어비스 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "11c809dd",
-    "company": "SOOP",
-    "type": "news",
-    "status": "open",
-    "title": "용산구, 어린이 생태환경교육 ‘자연아, 놀자! 텃밭놀이터’ 하반기 운영",
-    "summary": "용산구, 어린이 생태환경교육 ‘자연아, 놀자! 텃밭놀이터’ 하반기 운영&nbsp;&nbsp;시정일보",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBmeG8xSDZ1SWdZdzV1SXZnUXZvUnlTNmRCT3Y4TV9hM1JqT2lXRF9zMkx4XzctZlhTOEJYcEtsenZCVExjRnJuSEY5UHQ1ZWhhWjl0S0R2elZEQlh1THA4d1RteHhjTm9yWVFZ?oc=5",
-    "isNew": true,
-    "trackNote": "SOOP 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "7587236a",
-    "company": "SOOP",
-    "type": "news",
-    "status": "open",
-    "title": "경산시, 통합 돌봄 사업 역량 강화 교육 실시",
-    "summary": "경산시, 통합 돌봄 사업 역량 강화 교육 실시&nbsp;&nbsp;코리아투데이뉴스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiQkFVX3lxTE5NeWJ0Vl9zbzM5ejl3dXZGWkMtellQUnJzc2w2cTRRQzF0RE1nSjZSa2Fjazd0TUthZXZndmszYXJhQQ?oc=5",
-    "isNew": true,
-    "trackNote": "SOOP 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "0095be07",
-    "company": "현대제철",
-    "type": "recruit",
-    "status": "open",
-    "title": "용산구, 어린이 생태 환경교육 '자연아, 놀자! 텃밭놀이터' 하반기 참여기관 모집",
-    "summary": "용산구, 어린이 생태 환경교육 '자연아, 놀자! 텃밭놀이터' 하반기 참여기관 모집&nbsp;&nbsp;인디포커스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiQ0FVX3lxTE53MTYxeWYzR1RGM3I4aWl6cW92UWUzQjdUN1RlOVY3VVFDRlphQjhqeDlLWEp6R1FBNnlXU1ZQb0wyMzQ?oc=5",
-    "isNew": true,
-    "trackNote": "현대제철 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "f229b316",
-    "company": "르노코리아",
-    "type": "news",
-    "status": "open",
-    "title": "부산대, 남아프리카공화국 노스웨스트대 대표단과 글로벌 교육·연구 협력 확대 논의",
-    "summary": "부산대, 남아프리카공화국 노스웨스트대 대표단과 글로벌 교육·연구 협력 확대 논의&nbsp;&nbsp;인디포커스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxNc2xXSklBNDUwR0ZxSUY5TE9iQzBiWUZ4V1lrZENEYWVRcFhZNUFyRVJRQlRMVUZsUFhMeVJwNlYydEFCVG9mY1JfSE84YjViMkc3WTB6djJ1Z0hTMWJDSzEwcFBQUXNjd2UtUXExbV84WFROajZvQ3o2bVFEXzlnZVVRWkRac2VzeW9XTS1kOEw?oc=5",
-    "isNew": true,
-    "trackNote": "르노코리아 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "91a399b3",
-    "company": "한진",
-    "type": "recruit",
-    "status": "open",
-    "title": "한진, 소상공인 '해외특송' 수행기관 선정…수출 물류 지원",
-    "summary": "한진, 소상공인 '해외특송' 수행기관 선정…수출 물류 지원&nbsp;&nbsp;연합뉴스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTFBkTWdWTVBSaGtzREdZamp4UXJfeE5ITktSOXJZXzRpZnU2NEhWSXdJYng1RTRpeVdKSHVtYzJOQXRoY3p3cDF4OHo4QkRoZEdZR0ZORlRla3RPWEpXcllaRtIBYEFVX3lxTFBkTWdWTVBSaGtzREdZamp4UXJfeE5ITktSOXJZXzRpZnU2NEhWSXdJYng1RTRpeVdKSHVtYzJOQXRoY3p3cDF4OHo4QkRoZEdZR0ZORlRla3RPWEpXcllaRg?oc=5",
-    "isNew": true,
-    "trackNote": "한진 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "eeb1b1b8",
-    "company": "CJ제일제당",
-    "type": "news",
-    "status": "open",
-    "title": "부산대-부산교대 예비교원, 미국 워싱턴 패더럴웨이서, 글로벌 교육실습…수업 시연·교차 실습·K-Camp까지",
-    "summary": "부산대-부산교대 예비교원, 미국 워싱턴 패더럴웨이서, 글로벌 교육실습…수업 시연·교차 실습·K-Camp까지&nbsp;&nbsp;인디포커스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiQ0FVX3lxTE5Xb0JoN0d3NTg4ZDh0bmJ5MFI1clh1am9SRUhqYTM0M3RlZmplb0JWbzUtVTFMTUpxOWtFWHlSS2tDMXc?oc=5",
-    "isNew": true,
-    "trackNote": "CJ제일제당 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "3ddd2f8b",
-    "company": "교원그룹",
-    "type": "news",
-    "status": "open",
-    "title": "충남교육청, 몽골 학교에 정보화 기기 지원…교육 협력 확대",
-    "summary": "충남교육청, 몽골 학교에 정보화 기기 지원…교육 협력 확대&nbsp;&nbsp;뉴스홈(newshome)",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE9DT1plaDI5ckJ5Y1FKUGNvcG5ZcVptanJySjg0TVhZTVl5ZnhBWHI4MWhkTW9sem01aWpXVUpXQk9VX1cxbEozb1NKTUh1NGJHMWJWX3JMTkMzWFBIWHhsYTJhc1Fzcm50azNfbFZR?oc=5",
-    "isNew": true,
-    "trackNote": "교원그룹 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1115717a",
-    "company": "교원그룹",
-    "type": "news",
-    "status": "open",
-    "title": "충남교육청, 몽골 학교에 전자칠판·크롬북 기증…디지털 교육협력 확대",
-    "summary": "충남교육청, 몽골 학교에 전자칠판·크롬북 기증…디지털 교육협력 확대&nbsp;&nbsp;아산데일리",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiU0FVX3lxTE1XWHQ4Y1kwWlJOVWZkQld1M3FjVm9Oa0tFSGZPbDVWUTRHVkR6SkItUy1xMUt6M1hWVmNBUzFKOUJRcjVzWld1WGx4RVlzdDVFUDlV?oc=5",
-    "isNew": true,
-    "trackNote": "교원그룹 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "8f098fb0",
-    "company": "교원그룹",
-    "type": "news",
-    "status": "open",
-    "title": "충남도교육청, 몽골에 전자칠판·크롬북 기증…디지털 교육 협력 확대 - 보도자료 | 기사",
-    "summary": "충남도교육청, 몽골에 전자칠판·크롬북 기증…디지털 교육 협력 확대 - 보도자료 | 기사&nbsp;&nbsp;더팩트",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBqaVpyYkFqMExrS2VJd3hyWmhYZk9qX2t5VDFsRWt3b19EbERQaThXOXROWVJOTjVaXzNiQ1c2Mk1KYXc5TXoxUUNJb0JIQjNtQTd3WVdrUjdzWWlwQVo0?oc=5",
-    "isNew": true,
-    "trackNote": "교원그룹 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4abd5d5b",
-    "company": "동서식품",
-    "type": "news",
-    "status": "open",
-    "title": "부산대-부산교대 예비교원, 미국 워싱턴 패더럴웨이서, 글로벌 교육실습…수업 시연·교차 실습·K-Camp까지",
-    "summary": "부산대-부산교대 예비교원, 미국 워싱턴 패더럴웨이서, 글로벌 교육실습…수업 시연·교차 실습·K-Camp까지&nbsp;&nbsp;인디포커스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiQ0FVX3lxTE5Xb0JoN0d3NTg4ZDh0bmJ5MFI1clh1am9SRUhqYTM0M3RlZmplb0JWbzUtVTFMTUpxOWtFWHlSS2tDMXc?oc=5",
-    "isNew": true,
-    "trackNote": "동서식품 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "c3602e42",
-    "company": "동서식품",
-    "type": "news",
-    "status": "open",
-    "title": "부산대, 남아프리카공화국 노스웨스트대 대표단과 글로벌 교육·연구 협력 확대 논의",
-    "summary": "부산대, 남아프리카공화국 노스웨스트대 대표단과 글로벌 교육·연구 협력 확대 논의&nbsp;&nbsp;인디포커스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiQ0FVX3lxTFBTejZITmJMZnBGMW9ENVU1OUh1cTkxUVFTZmJTQ3Mzcm5zYnJQa0ozTUVoRFU1cEk4UzRMaE1sZXd5Z2s?oc=5",
-    "isNew": true,
-    "trackNote": "동서식품 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "b4fa514f",
-    "company": "아산나눔재단",
-    "type": "news",
-    "status": "open",
-    "title": "아산시청공무원노동조합, 아산시미래장학회에 장학기금 100만원 기탁",
-    "summary": "아산시청공무원노동조합, 아산시미래장학회에 장학기금 100만원 기탁&nbsp;&nbsp;타파인",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE4tVFcwTnFuNkxjbGJ6Nmo1dGI1ZXhPVFpSNXFPMk9VQ1plTm9DQkF6T0EyU1NlMjlqSXZqV2o4ZnNBQVU2RmRzejV4TlJUTDNRQUh5Uzh6RnU?oc=5",
-    "isNew": true,
-    "trackNote": "아산나눔재단 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "42e81ff2",
-    "company": "SK텔레콤",
-    "type": "news",
-    "status": "open",
-    "title": "생성형 AI로 문해력 잡는다…SKT 'AI 그림일기'로 초·중·고 AI 교육 확대",
-    "summary": "생성형 AI로 문해력 잡는다…SKT 'AI 그림일기'로 초·중·고 AI 교육 확대&nbsp;&nbsp;매일일보",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTE1UY3FCQkZuelpFcm9OSi1fY0pVVEZNWUF3d2cyRUd2eldiZ3ZCNG1mQVlud1ZhaTdLeDZGOTBSaHNPbldHZlVCZ0hsdlBxa3QzV2hYRGxsUHd3U3RZZTJxS2s4UWI?oc=5",
-    "isNew": true,
-    "trackNote": "SK텔레콤 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "b7ca4db8",
-    "company": "SK텔레콤",
-    "type": "news",
-    "status": "open",
-    "title": "SKT, 순천향대와 'AI 그림일기' 교육 현장 AX와 미래 인재 육성 앞장",
-    "summary": "SKT, 순천향대와 'AI 그림일기' 교육 현장 AX와 미래 인재 육성 앞장&nbsp;&nbsp;마일드경제",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9mNnFXSGs0Y0VEOU9qSGhJcmh3a3pvLWsxVUo0aDFweDVST08xd1lQZGR3bGE4X044NlY4NmUta1RZaG5FWURwWGhURGdRRUMzZWc2N0l5aWJkcTdNUFNkTGI2MW8xOWRtNzU0?oc=5",
-    "isNew": true,
-    "trackNote": "SK텔레콤 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "064ddfff",
-    "company": "삼성화재",
-    "type": "news",
-    "status": "open",
-    "title": "아산시청공무원노동조합, 아산시미래장학회에 장학기금 100만원 기탁",
-    "summary": "아산시청공무원노동조합, 아산시미래장학회에 장학기금 100만원 기탁&nbsp;&nbsp;타파인",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE4tVFcwTnFuNkxjbGJ6Nmo1dGI1ZXhPVFpSNXFPMk9VQ1plTm9DQkF6T0EyU1NlMjlqSXZqV2o4ZnNBQVU2RmRzejV4TlJUTDNRQUh5Uzh6RnU?oc=5",
-    "isNew": true,
-    "trackNote": "삼성화재 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1edc6555",
-    "company": "현대카드",
-    "type": "recruit",
-    "status": "open",
-    "title": "경기테크노파크, 중기부 ‘스마트제조 전문인력 육성사업’ 수도권 교육생 모집",
-    "summary": "경기테크노파크, 중기부 ‘스마트제조 전문인력 육성사업’ 수도권 교육생 모집&nbsp;&nbsp;투데이안산",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE52Ul9BSmR2STVrcElka1AyeS0xX3F0Z3hpeDNmejh0RWpMVVJoT1NzWjBJS040dFFqTEpVdVMtelBqejAtZ3pUSko0VG5mSk1ZSG05b2tUMzZMbElLVDh1UDF4SzdpRGcwaFhnSXNB0gFyQVVfeXFMT0J3MWJuSGl0TzJyWnFVSnUza2NMRFRFbE0wajdmdm5FbGJrbmdUdFhjX3NjNmhtM1RDb256aVRUdDNxejY3VDhXampFU2RpU19Vcy1qaU5OS3c2MlZrRkpabjVUNFp3LUNNME5XcFRwdmFB?oc=5",
-    "isNew": true,
-    "trackNote": "현대카드 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "4f253327",
-    "company": "한국투자증권",
-    "type": "news",
-    "status": "open",
-    "title": "SKT, 순천향대와 'AI 그림일기' 교육 현장 AX와 미래 인재 육성 앞장",
-    "summary": "SKT, 순천향대와 'AI 그림일기' 교육 현장 AX와 미래 인재 육성 앞장&nbsp;&nbsp;마일드경제",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9mNnFXSGs0Y0VEOU9qSGhJcmh3a3pvLWsxVUo0aDFweDVST08xd1lQZGR3bGE4X044NlY4NmUta1RZaG5FWURwWGhURGdRRUMzZWc2N0l5aWJkcTdNUFNkTGI2MW8xOWRtNzU0?oc=5",
-    "isNew": true,
-    "trackNote": "한국투자증권 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "9135904f",
-    "company": "SK이노베이션",
-    "type": "news",
-    "status": "open",
-    "title": "SKT, 순천향대와 'AI 그림일기' 교육 현장 AX와 미래 인재 육성 앞장",
-    "summary": "SKT, 순천향대와 'AI 그림일기' 교육 현장 AX와 미래 인재 육성 앞장&nbsp;&nbsp;마일드경제",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9mNnFXSGs0Y0VEOU9qSGhJcmh3a3pvLWsxVUo0aDFweDVST08xd1lQZGR3bGE4X044NlY4NmUta1RZaG5FWURwWGhURGdRRUMzZWc2N0l5aWJkcTdNUFNkTGI2MW8xOWRtNzU0?oc=5",
-    "isNew": true,
-    "trackNote": "SK이노베이션 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "cd10d7f9",
-    "company": "한화솔루션",
-    "type": "news",
-    "status": "open",
-    "title": "SKT·순천향대, 미래인재 육성 ‘맞손’…교육 현장 AX 견인",
-    "summary": "SKT·순천향대, 미래인재 육성 ‘맞손’…교육 현장 AX 견인&nbsp;&nbsp;IT비즈뉴스",
-    "date": "2026-08-03",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTFAtOENIa0RKeG5HXzBleURxV291NGEwSGlCNUhsaEdRRUpDNU1mUUhIa3dEV25zRC1UOF9mcHhxN3UyTl92VmVpYWhGQWdIcFhUVDBlMW95eTNWbkZFOF9OM3NfZDhrNy1qRWc5Vg?oc=5",
-    "isNew": true,
-    "trackNote": "한화솔루션 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "25598dff",
-    "company": "삼성전자",
-    "type": "recruit",
-    "status": "open",
-    "title": "2018 대안교육 위탁기관 추가 지정 공모",
-    "summary": "2018 대안교육 위탁기관 추가 지정 공모&nbsp;&nbsp;경인뷰",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxQNl9mUHhjakJ6clpxMjY3azkxMl82SkNkbl95M3E5Ul9Fai1jNF9zYjVVc25RTXBMQzczSkU1Sl8tZkhjMm1QeUduUkExQXZXN0NMTEN0ekxkYVBCSFRiRko5UFRXcDFkNndLVVk2dDJXTnNQaERLbmpIWjItblJGbjZmaFZFSi1yV1BkaGdMOVdNZlNXOTdiZ2lTcnIyZXc2eEZZQllLYzdSVkUtaWc?oc=5",
-    "isNew": true,
-    "trackNote": "삼성전자 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "a78b56aa",
-    "company": "LG전자",
-    "type": "recruit",
-    "status": "open",
-    "title": "2018 대안교육 위탁기관 추가 지정 공모",
-    "summary": "2018 대안교육 위탁기관 추가 지정 공모&nbsp;&nbsp;경인뷰",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxQNl9mUHhjakJ6clpxMjY3azkxMl82SkNkbl95M3E5Ul9Fai1jNF9zYjVVc25RTXBMQzczSkU1Sl8tZkhjMm1QeUduUkExQXZXN0NMTEN0ekxkYVBCSFRiRko5UFRXcDFkNndLVVk2dDJXTnNQaERLbmpIWjItblJGbjZmaFZFSi1yV1BkaGdMOVdNZlNXOTdiZ2lTcnIyZXc2eEZZQllLYzdSVkUtaWc?oc=5",
-    "isNew": true,
-    "trackNote": "LG전자 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "308ceb30",
-    "company": "미래엔",
-    "type": "recruit",
-    "status": "open",
-    "title": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략",
-    "summary": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략&nbsp;&nbsp;v.daum.net",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE1Ud1dLd3FtV3M0ZFQ3TE9MS0xTUlVLUG85RWxkTVNqUUJaT3BtaS1hU1B0M2x0bXo2VmdTUzBPeEFUVzJnVW1Bd0JPbmJ1a2hjN1dNQw?oc=5",
-    "isNew": true,
-    "trackNote": "미래엔 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "2365cd70",
-    "company": "대상문화재단",
-    "type": "recruit",
-    "status": "open",
-    "title": "2018 대안교육 위탁기관 추가 지정 공모",
-    "summary": "2018 대안교육 위탁기관 추가 지정 공모&nbsp;&nbsp;경인뷰",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxQNl9mUHhjakJ6clpxMjY3azkxMl82SkNkbl95M3E5Ul9Fai1jNF9zYjVVc25RTXBMQzczSkU1Sl8tZkhjMm1QeUduUkExQXZXN0NMTEN0ekxkYVBCSFRiRko5UFRXcDFkNndLVVk2dDJXTnNQaERLbmpIWjItblJGbjZmaFZFSi1yV1BkaGdMOVdNZlNXOTdiZ2lTcnIyZXc2eEZZQllLYzdSVkUtaWc?oc=5",
-    "isNew": true,
-    "trackNote": "대상문화재단 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "1bf0109c",
-    "company": "쿠팡",
-    "type": "recruit",
-    "status": "open",
-    "title": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략",
-    "summary": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략&nbsp;&nbsp;아이뉴스24",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBtczNER0luSnRBR1lYa1BTaVl0TFhXZ3dvc0Q0dDJ3emlTaUhSM2tqdlJHWlRnYkxHeU1rRWdGaFAyQnAyTEw3UnR4NA?oc=5",
-    "isNew": true,
-    "trackNote": "쿠팡 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "637002af",
-    "company": "LG CNS",
-    "type": "recruit",
-    "status": "open",
-    "title": "2018 대안교육 위탁기관 추가 지정 공모",
-    "summary": "2018 대안교육 위탁기관 추가 지정 공모&nbsp;&nbsp;경인뷰",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxQNl9mUHhjakJ6clpxMjY3azkxMl82SkNkbl95M3E5Ul9Fai1jNF9zYjVVc25RTXBMQzczSkU1Sl8tZkhjMm1QeUduUkExQXZXN0NMTEN0ekxkYVBCSFRiRko5UFRXcDFkNndLVVk2dDJXTnNQaERLbmpIWjItblJGbjZmaFZFSi1yV1BkaGdMOVdNZlNXOTdiZ2lTcnIyZXc2eEZZQllLYzdSVkUtaWc?oc=5",
-    "isNew": true,
-    "trackNote": "LG CNS 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "aff53923",
-    "company": "SOOP",
-    "type": "recruit",
-    "status": "open",
-    "title": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략",
-    "summary": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략&nbsp;&nbsp;v.daum.net",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE1Ud1dLd3FtV3M0ZFQ3TE9MS0xTUlVLUG85RWxkTVNqUUJaT3BtaS1hU1B0M2x0bXo2VmdTUzBPeEFUVzJnVW1Bd0JPbmJ1a2hjN1dNQw?oc=5",
-    "isNew": true,
-    "trackNote": "SOOP 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "a70951bf",
-    "company": "현대모비스",
-    "type": "recruit",
-    "status": "open",
-    "title": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략",
-    "summary": "경북도, 첨단산업 인재 육성 국비 확보 총력전…1천 페이지 전략으로 교육부 공모 공략&nbsp;&nbsp;v.daum.net",
-    "date": "2026-08-02",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE9XLXp1S0wxZUVDbTR1YXI0NEFQSkFmZlY3eU1EQzVqb191NmRvS05JUW92ZDU0T3pESUZGUE9kcXlOQXFaX2ZPQTU3SQ?oc=5",
-    "isNew": true,
-    "trackNote": "현대모비스 모집 공고 확인. 마감일 체크 후 즉시 지원 검토. 이번 회차 마감 시 다음 공모 시점(통상 6~12개월 후) 캘린더 등록 권장.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "697ff5cd",
-    "company": "삼성전자",
-    "type": "news",
-    "status": "open",
-    "title": "경기도노인맞춤돌봄지원센터, '퇴원환자 단기집중 서비스'를 위한 교육 실시",
-    "summary": "경기도노인맞춤돌봄지원센터, '퇴원환자 단기집중 서비스'를 위한 교육 실시&nbsp;&nbsp;팝콘뉴스",
-    "date": "2026-08-01",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE9MRGE3NWJVZTRFX09lRkRTbDhHdUIyVFVVb0VibmROMGQ1MDlVT2xmUVdfcFdkNTFIbUg3U293d0RCdk9EcEtzbXYzXzc3LTAzTlppMHhSdmpFRDdHZVM4SWpaLTM5aDhBZkt2dzR30gFyQVVfeXFMT2phSGdRQzZrLXJJZzlwenFpNDNDMmRvUTZ5UnlJTUZyY0JSbUR2d1ZUU1lFM0hKenpYQTdMRFZzNERBRzVaTlRweEhzQkNuRjdGUkdUSEtmVXA5ZzNNNUVTVUNCc0NSZnZveDVxb3V0UUdB?oc=5",
-    "isNew": true,
-    "trackNote": "삼성전자 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  },
-  {
-    "id": "0e14084f",
-    "company": "쿠팡",
-    "type": "news",
-    "status": "open",
-    "title": "경기도노인맞춤돌봄지원센터, '퇴원환자 단기집중 서비스'를 위한 교육 실시",
-    "summary": "경기도노인맞춤돌봄지원센터, '퇴원환자 단기집중 서비스'를 위한 교육 실시&nbsp;&nbsp;팝콘뉴스",
-    "date": "2026-08-01",
-    "deadline": null,
-    "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE9MRGE3NWJVZTRFX09lRkRTbDhHdUIyVFVVb0VibmROMGQ1MDlVT2xmUVdfcFdkNTFIbUg3U293d0RCdk9EcEtzbXYzXzc3LTAzTlppMHhSdmpFRDdHZVM4SWpaLTM5aDhBZkt2dzR30gFyQVVfeXFMT2phSGdRQzZrLXJJZzlwenFpNDNDMmRvUTZ5UnlJTUZyY0JSbUR2d1ZUU1lFM0hKenpYQTdMRFZzNERBRzVaTlRweEhzQkNuRjdGUkdUSEtmVXA5ZzNNNUVTVUNCc0NSZnZveDVxb3V0UUdB?oc=5",
-    "isNew": true,
-    "trackNote": "쿠팡 사회공헌 관련 소식 수집. 사업 방향성 파악 및 협업 가능 접점 검토. 관련 담당자 컨텍 시 이 소식 활용 가능.",
-    "trackWhen": "지금 즉시 — 현재 모집/공고 진행 중"
-  }
-];
+const FINDINGS = [];
 // FINDINGS_END
-
 // ARCHIVE_START
 const ARCHIVE = [];
 // ARCHIVE_END
-
 let currentTab = 'all', companyFilter = 'all';
-
 function setTab(t, el) {
   currentTab = t;
   document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
   el.classList.add('active');
   renderFeed();
 }
-
 function setCompanyFilter(f, el) {
   companyFilter = f;
   document.querySelectorAll('.f-btn').forEach(e => e.classList.remove('active'));
   el.classList.add('active');
   renderCompanies();
 }
-
 function statusBadge(item) {
   if (item.status === 'open') return '<span class="badge badge-open">🟢 모집 중</span>';
   if (item.status === 'closed') return '<span class="badge badge-closed">🔴 마감</span>';
   return '';
 }
-
 function typeBadge(type) {
   if (type === 'recruit') return '<span class="badge badge-recruit">📢 모집·공모</span>';
   if (type === 'tender') return '<span class="badge badge-tender">📑 입찰</span>';
   return '<span class="badge badge-news">📰 뉴스</span>';
 }
-
 function renderItem(f) {
   return `<div class="news-item">
     <div class="news-badges">${typeBadge(f.type)}${statusBadge(f)}</div>
@@ -1092,10 +236,8 @@ function renderItem(f) {
     </div>
   </div>`;
 }
-
 function renderFeed() {
   const feed = document.getElementById('newsFeed');
-
   if (currentTab === 'archive') {
     if (!ARCHIVE.length) {
       feed.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>아직 아카이브된 기록이 없습니다.<br>7일이 지난 뉴스가 자동으로 여기 쌓입니다.</p></div>';
@@ -1117,14 +259,12 @@ function renderFeed() {
       </div>`).join('');
     return;
   }
-
   let data = [...FINDINGS];
   if (currentTab === 'open')    data = data.filter(f => f.status === 'open');
   if (currentTab === 'recruit') data = data.filter(f => f.type === 'recruit');
   if (currentTab === 'track')   data = data.filter(f => f.trackNote);
   if (currentTab === 'news')    data = data.filter(f => f.type === 'news');
   data.sort((a, b) => ({open:0,closed:1,news:2}[a.status]||2) - ({open:0,closed:1,news:2}[b.status]||2));
-
   document.getElementById('feedCount').textContent = data.length + '건';
   if (!data.length) {
     feed.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>수집된 공고가 없습니다.<br>매일 오전 9시 자동 스캔됩니다.</p></div>';
@@ -1132,7 +272,6 @@ function renderFeed() {
   }
   feed.innerHTML = data.map(f => renderItem(f)).join('');
 }
-
 function toggleWeek(header) {
   const body = header.nextElementSibling;
   const icon = header.querySelector('.toggle-icon');
@@ -1140,7 +279,6 @@ function toggleWeek(header) {
   body.style.display = isOpen ? 'none' : 'block';
   icon.textContent = isOpen ? '▶' : '▼';
 }
-
 function renderCompanies() {
   const q = document.getElementById('companySearch').value.trim();
   const withNews = new Set(FINDINGS.map(f => f.company));
@@ -1160,7 +298,6 @@ function renderCompanies() {
     </div>`;
   }).join('');
 }
-
 function filterByCompany(name) {
   const data = FINDINGS.filter(f => f.company === name);
   if (!data.length) return;
@@ -1168,7 +305,6 @@ function filterByCompany(name) {
   document.getElementById('feedCount').textContent = data.length + '건';
   document.getElementById('newsFeed').innerHTML = data.map(f => renderItem(f)).join('');
 }
-
 function updateStats() {
   document.getElementById('sOpen').textContent = FINDINGS.filter(f => f.status === 'open').length;
   document.getElementById('sRecruit').textContent = FINDINGS.filter(f => f.type === 'recruit').length;
@@ -1178,7 +314,6 @@ function updateStats() {
   const dates = FINDINGS.map(f => f.date).filter(Boolean).sort();
   document.getElementById('lastScan').textContent = dates.length ? dates[dates.length - 1] : '아직 없음';
 }
-
 updateStats(); renderFeed(); renderCompanies();
 </script>
 </body>
