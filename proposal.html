@@ -10646,6 +10646,7 @@ async function fetchRecentNews(companyName) {
 // Render right panel
 // ═══════════════════════════════════════════════════════
 function renderArea() {
+  console.log('[DEBUG] renderArea() 진입 - results.strategy 길이:', results.strategy.length, '| isLoading:', isLoading);
   const area = document.getElementById('proposalArea');
   const c = selectedCompany;
   if (!c) {
@@ -11149,7 +11150,15 @@ async function generate() {
   console.log('[DEBUG] isLoading=false, renderArea() 호출. results.strategy 길이:', results.strategy.length);
   isLoading = false;
   renderArea();
-  setTimeout(() => document.querySelector('.result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  setTimeout(() => {
+    const rs = document.querySelector('.result-section');
+    console.log('[DEBUG] 100ms 후 result-section DOM 존재:', !!rs);
+    if (rs) {
+      rs.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      console.warn('[DEBUG] result-section 없음! results.strategy 현재 길이:', results.strategy.length, '| isLoading:', isLoading);
+    }
+  }, 100);
 }
 
 function buildPrompt(c, news) {
