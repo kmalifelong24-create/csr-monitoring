@@ -11089,8 +11089,11 @@ function saveApiSettings() {
 function switchTab(tab) {
   activeTab = tab;
   renderArea();
-  // scroll result into view
-  setTimeout(() => document.querySelector('.result-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+  setTimeout(() => {
+    const area = document.getElementById('proposalArea');
+    const rs = document.querySelector('.result-section');
+    if (rs && area) area.scrollTop = rs.offsetTop - area.offsetTop - 12;
+  }, 50);
 }
 
 async function copyResult(tab) {
@@ -11151,12 +11154,10 @@ async function generate() {
   isLoading = false;
   renderArea();
   setTimeout(() => {
+    const area = document.getElementById('proposalArea');
     const rs = document.querySelector('.result-section');
-    console.log('[DEBUG] 100ms 후 result-section DOM 존재:', !!rs);
-    if (rs) {
-      rs.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      console.warn('[DEBUG] result-section 없음! results.strategy 현재 길이:', results.strategy.length, '| isLoading:', isLoading);
+    if (rs && area) {
+      area.scrollTop = rs.offsetTop - area.offsetTop - 12;
     }
   }, 100);
 }
