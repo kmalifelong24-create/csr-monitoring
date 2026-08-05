@@ -48,6 +48,8 @@
 
   /* Right panel */
   .proposal-area { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  /* flex 컬럼에서 자식이 눌려 사라지는 것 방지 (핵심) */
+  .proposal-area > * { flex-shrink: 0; }
 
   /* Company card */
   .company-card { background: #f8faff; border: 1px solid #dbeafe; border-radius: 10px; padding: 14px; }
@@ -100,8 +102,8 @@
   .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Results */
-  .result-section { background: #fff; border: 1px solid #e5e8f0; border-radius: 10px; overflow: hidden; }
-  .result-tabs { display: flex; border-bottom: 1px solid #e5e8f0; }
+  .result-section { background: #fff; border: 1px solid #e5e8f0; border-radius: 10px; overflow: visible; flex-shrink: 0; min-height: 200px; }
+  .result-tabs { display: flex; border-bottom: 1px solid #e5e8f0; border-radius: 10px 10px 0 0; overflow: hidden; }
   .result-tab { flex: 1; padding: 10px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; color: #888; border-bottom: 2px solid transparent; transition: all 0.15s; }
   .result-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; background: #f8faff; }
   .result-content { padding: 14px; }
