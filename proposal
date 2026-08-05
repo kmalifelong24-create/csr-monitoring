@@ -228,7 +228,10 @@
       <button class="f-btn active" onclick="setFilter('all',this)">전체</button>
       <button class="f-btn" onclick="setFilter('A',this)">🟢 A등급</button>
       <button class="f-btn" onclick="setFilter('B',this)">🔵 B등급</button>
+      <button class="f-btn" onclick="setFilter('C',this)">🟡 C등급</button>
+      <button class="f-btn" onclick="setFilter('D',this)">⚪ D등급</button>
       <button class="f-btn" onclick="setFilter('rec',this)">✅ 제안추천</button>
+      <button class="f-btn" onclick="setFilter('nograde',this)">📋 미분류</button>
       <button class="f-btn" onclick="setFilter('tracked',this)">📌 추적 중</button>
       <button class="track-export-btn" onclick="exportTracking()" title="추적 현황 CSV 내보내기">📊 내보내기</button>
     </div>
@@ -10583,7 +10586,10 @@ function renderList() {
     if (q && !c.name.toLowerCase().includes(q) && !sec.includes(q)) return false;
     if (currentFilter === 'A') return c.priority === 'A';
     if (currentFilter === 'B') return c.priority === 'B';
+    if (currentFilter === 'C') return c.priority === 'C';
+    if (currentFilter === 'D') return c.priority === 'D';
     if (currentFilter === 'rec') return c.recommendation === 'Y-우선' || c.recommendation === 'Y-조건부';
+    if (currentFilter === 'nograde') return !c.priority && !c.recommendation;
     if (currentFilter === 'tracked') return !!getTracking(c.name);
     return true;
   });
