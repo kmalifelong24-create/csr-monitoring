@@ -16591,11 +16591,7 @@ function renderArea() {
       ? renderCsrCard()
       : renderCckCard();
 
-  area.innerHTML = `
-    ${statusBarHtml}
-    ${cardHtml}
-
-    <!-- Recent news -->
+  const newsHtml = `
     <div class="news-section">
       <div class="news-section-label">📰 최근 모니터링 소식</div>
       ${news === null
@@ -16612,9 +16608,9 @@ function renderArea() {
               </div>`).join('')
           : '<div class="no-news">수집된 최근 소식 없음 — 모니터링 탭에서 확인하세요.</div>'
       }
-    </div>
+    </div>`;
 
-    <!-- API settings -->
+  const apiHtml = `
     <div class="api-section">
       <div class="api-section-label">⚙️ Claude API 설정</div>
       <div class="api-row">
@@ -16631,31 +16627,49 @@ function renderArea() {
         </select>
       </div>
       <div id="apiAlert"></div>
-    </div>
+    </div>`;
 
-    <!-- Generate button -->
+  const generateBtnHtml = `
     <button class="generate-btn" id="generateBtn" onclick="generate()" ${isLoading ? 'disabled' : ''}>
       ${isLoading ? '⏳ 생성 중...' : '✨ 맞춤 전략 + 전화 스크립트 + 이메일 생성'}
-    </button>
+    </button>`;
 
-    <!-- Results -->
-    ${results.strategy ? `
-    <div class="result-section">
-      <div class="result-tabs">
-        <div class="result-tab ${activeTab === 'strategy' ? 'active' : ''}" onclick="switchTab('strategy')">📋 제안 전략</div>
-        <div class="result-tab ${activeTab === 'phone' ? 'active' : ''}" onclick="switchTab('phone')">📞 전화 스크립트</div>
-        <div class="result-tab ${activeTab === 'email' ? 'active' : ''}" onclick="switchTab('email')">📧 이메일 초안</div>
-      </div>
-      <div class="result-content">
-        <div class="result-text">${escapeHtml(results[activeTab] || '—')}</div>
-        <div class="copy-row">
-          <button class="copy-btn" onclick="copyResult('${activeTab}')">📋 복사</button>
-          <button class="copy-btn" onclick="downloadTxt()">📄 TXT 저장</button>
-          <button class="copy-btn" onclick="downloadCsv()" style="color:#166534;background:#dcfce7;border-color:#86efac;">📊 CSV 저장 (구글시트)</button>
+  if (results.strategy) {
+    // 결과 있을 때: 결과를 최상단에 배치
+    area.innerHTML = `
+      ${statusBarHtml}
+      <div class="result-section">
+        <div class="result-tabs">
+          <div class="result-tab ${activeTab === 'strategy' ? 'active' : ''}" onclick="switchTab('strategy')">📋 제안 전략</div>
+          <div class="result-tab ${activeTab === 'phone' ? 'active' : ''}" onclick="switchTab('phone')">📞 전화 스크립트</div>
+          <div class="result-tab ${activeTab === 'email' ? 'active' : ''}" onclick="switchTab('email')">📧 이메일 초안</div>
+        </div>
+        <div class="result-content">
+          <div class="result-text">${escapeHtml(results[activeTab] || '—')}</div>
+          <div class="copy-row">
+            <button class="copy-btn" onclick="copyResult('${activeTab}')">📋 복사</button>
+            <button class="copy-btn" onclick="downloadTxt()">📄 TXT 저장</button>
+            <button class="copy-btn" onclick="downloadCsv()" style="color:#166534;background:#dcfce7;border-color:#86efac;">📊 CSV 저장 (구글시트)</button>
+            <button class="copy-btn" onclick="clearResults()" style="margin-left:auto;color:#6b7280;background:#f3f4f6;border-color:#e5e7eb;">↩ 다시 생성</button>
+          </div>
         </div>
       </div>
-    </div>` : ''}
-  `;
+      ${apiHtml}
+      ${generateBtnHtml}
+      ${cardHtml}
+      ${newsHtml}
+    `;
+    area.scrollTop = 0;
+  } else {
+    // 결과 없을 때: 기존 순서
+    area.innerHTML = `
+      ${statusBarHtml}
+      ${cardHtml}
+      ${newsHtml}
+      ${apiHtml}
+      ${generateBtnHtml}
+    `;
+  }
 }
 
 function escapeHtml(str) {
@@ -16680,11 +16694,12 @@ function saveApiSettings() {
 function switchTab(tab) {
   activeTab = tab;
   renderArea();
-  setTimeout(() => {
-    const area = document.getElementById('proposalArea');
-    const rs = document.querySelector('.result-section');
-    if (rs && area) area.scrollTop = rs.offsetTop - area.offsetTop - 12;
-  }, 50);
+}
+
+function clearResults() {
+  results = { strategy: '', phone: '', email: '' };
+  activeTab = 'strategy';
+  renderArea();
 }
 
 async function copyResult(tab) {
@@ -16735,14 +16750,7 @@ async function generate() {
     activeTab = 'strategy';
   }
   isLoading = false;
-  renderArea();
-  setTimeout(() => {
-    const area = document.getElementById('proposalArea');
-    const rs = document.querySelector('.result-section');
-    if (rs && area) {
-      area.scrollTop = rs.offsetTop - area.offsetTop - 12;
-    }
-  }, 100);
+  renderArea(); // 결과가 최상단에 렌더링됨, 스크롤 불필요
 }
 
 function buildPrompt(c, news) {
