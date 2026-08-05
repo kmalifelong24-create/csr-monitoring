@@ -11111,6 +11111,8 @@ async function generate() {
   const model = document.getElementById('modelSelect')?.value || localStorage.getItem('anthropic_model') || 'claude-sonnet-4-5';
   const c = selectedCompany;
 
+  console.log('[DEBUG] generate() 시작 - model:', model, '| apiKey 앞4자:', apiKey.slice(0,7));
+
   // Save key for next time
   localStorage.setItem('anthropic_api_key', apiKey);
   localStorage.setItem('anthropic_model', model);
@@ -11121,7 +11123,9 @@ async function generate() {
   try {
     const news = c._news || [];
     const prompt = buildPrompt(c, news);
+    console.log('[DEBUG] callClaude 호출 중...');
     const raw = await callClaude(apiKey, model, prompt);
+    console.log('[DEBUG] raw 응답 길이:', raw.length, '| 앞 200자:', raw.slice(0, 200));
 
     // Parse sections
     const strategyM = raw.match(/\[맞춤 제안 전략\]([\s\S]*?)(?=\[전화 스크립트\]|$)/);
@@ -11132,15 +11136,17 @@ async function generate() {
     results.phone = phoneM ? phoneM[1].trim() : '(섹션을 찾을 수 없습니다. 전략 탭 전체 내용을 참고하세요.)';
     results.email = emailM ? emailM[1].trim() : '(섹션을 찾을 수 없습니다. 전략 탭 전체 내용을 참고하세요.)';
     activeTab = 'strategy';
+    console.log('[DEBUG] results.strategy 길이:', results.strategy.length);
 
   } catch (err) {
     results.strategy = `⚠️ 오류가 발생했습니다.\n\n오류 내용: ${err.message}\n\n확인사항:\n1. API Key가 올바르게 입력·저장됐는지 확인\n2. Anthropic Console에서 크레딧($)이 있는지 확인\n3. 페이지를 새로고침하고 다시 시도`;
     results.phone = '—';
     results.email = '—';
     activeTab = 'strategy';
-    console.error('Claude API 오류:', err);
+    console.error('[DEBUG] Claude API 오류:', err);
   }
 
+  console.log('[DEBUG] isLoading=false, renderArea() 호출. results.strategy 길이:', results.strategy.length);
   isLoading = false;
   renderArea();
   setTimeout(() => document.querySelector('.result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
