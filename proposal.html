@@ -96,6 +96,13 @@
   .save-btn { padding: 5px 10px; background: #f0f4ff; border: 1px solid #bfdbfe; border-radius: 7px; font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; white-space: nowrap; }
   .save-btn:hover { background: #dbeafe; }
 
+  /* 동기화 상태 뱃지 */
+  .sync-badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sync-idle, .sync-off { background: #f3f4f6; color: #6b7280; }
+  .sync-syncing { background: #fef3c7; color: #b45309; }
+  .sync-ok { background: #dcfce7; color: #166534; }
+  .sync-error { background: #fee2e2; color: #991b1b; }
+
   /* Generate button */
   .generate-btn { width: 100%; padding: 13px; background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; letter-spacing: 0.3px; }
   .generate-btn:hover:not(:disabled) { opacity: 0.9; }
@@ -16117,6 +16124,100 @@ const STATUS_LABELS = {
   pass:      '⛔ 패스',
 };
 
+// ─── 구글시트 동기화 설정 ───
+let syncState = 'idle'; // idle | syncing | ok | error | off
+let syncMessage = '';
+
+function getSyncUrl() {
+  return localStorage.getItem('sheet_sync_url') || '';
+}
+function saveSyncUrl() {
+  const inp = document.getElementById('syncUrlInput');
+  if (!inp) return;
+  const url = inp.value.trim();
+  if (url) {
+    localStorage.setItem('sheet_sync_url', url);
+    syncMessage = '✓ 저장됨. 불러오는 중...';
+    renderArea();
+    pullFromSheet(true);
+  } else {
+    localStorage.removeItem('sheet_sync_url');
+    syncState = 'off';
+    syncMessage = '연동 해제됨 (이 브라우저에만 저장)';
+    renderArea();
+  }
+}
+
+// 시트 → 브라우저 (불러오기)
+async function pullFromSheet(showResult) {
+  const url = getSyncUrl();
+  if (!url) { syncState = 'off'; return; }
+  syncState = 'syncing';
+  syncMessage = '시트에서 불러오는 중...';
+  if (showResult) renderArea();
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || '응답 오류');
+    localStorage.setItem('proposal_tracking', JSON.stringify(j.data || {}));
+    syncState = 'ok';
+    const cnt = Object.keys(j.data || {}).length;
+    syncMessage = `✓ 시트와 동기화됨 (${cnt}건)`;
+    renderList();
+    renderArea();
+  } catch (err) {
+    syncState = 'error';
+    syncMessage = '⚠️ 시트 연결 실패: ' + err.message;
+    if (showResult) renderArea();
+  }
+}
+
+// 브라우저 → 시트 (저장), 실패해도 로컬 기록은 유지
+async function pushToSheet(payload) {
+  const url = getSyncUrl();
+  if (!url) return;
+  syncState = 'syncing';
+  syncMessage = '시트에 저장 중...';
+  updateSyncBadge();
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // CORS 사전요청 회피
+      body: JSON.stringify(payload)
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || '응답 오류');
+    syncState = 'ok';
+    syncMessage = '✓ 시트에 저장됨';
+  } catch (err) {
+    syncState = 'error';
+    syncMessage = '⚠️ 시트 저장 실패 (기록은 이 브라우저에 남아있음)';
+  }
+  updateSyncBadge();
+}
+
+// 전체 밀어넣기 (기존 로컬 기록을 시트로 한 번에 옮길 때)
+async function pushAllToSheet() {
+  const url = getSyncUrl();
+  if (!url) { alert('먼저 시트 주소를 저장해주세요.'); return; }
+  const all = getAllTracking();
+  const records = Object.entries(all).map(([name, d]) => ({
+    name, status: d.status || '', date: d.date || '', memo: d.memo || ''
+  }));
+  if (records.length === 0) { alert('올릴 기록이 없습니다.'); return; }
+  if (!confirm(`${records.length}건을 시트에 올립니다. 계속할까요?`)) return;
+  await pushToSheet({ action: 'bulk', records });
+  renderArea();
+}
+
+function updateSyncBadge() {
+  const el = document.getElementById('syncBadge');
+  if (el) {
+    el.textContent = syncMessage;
+    el.className = 'sync-badge sync-' + syncState;
+  }
+}
+
 function getAllTracking() {
   try { return JSON.parse(localStorage.getItem('proposal_tracking') || '{}'); }
   catch(e) { return {}; }
@@ -16132,11 +16233,13 @@ function setTracking(name, status, memo) {
   all[name].date = today;
   if (memo !== undefined) all[name].memo = memo;
   localStorage.setItem('proposal_tracking', JSON.stringify(all));
+  pushToSheet({ action: 'upsert', record: { name, status, date: today, memo: all[name].memo || '' } });
 }
 function clearTracking(name) {
   const all = getAllTracking();
   delete all[name];
   localStorage.setItem('proposal_tracking', JSON.stringify(all));
+  pushToSheet({ action: 'delete', name });
 }
 function saveMemo(name) {
   const inp = document.getElementById('trackMemoInput');
@@ -16145,6 +16248,9 @@ function saveMemo(name) {
   if (!all[name]) all[name] = { status: 'contacted', date: '' };
   all[name].memo = inp.value.trim();
   localStorage.setItem('proposal_tracking', JSON.stringify(all));
+  pushToSheet({ action: 'upsert', record: {
+    name, status: all[name].status || 'contacted', date: all[name].date || '', memo: all[name].memo
+  }});
   renderArea();
 }
 function exportTracking() {
@@ -16612,6 +16718,23 @@ function renderArea() {
       }
     </div>`;
 
+  const syncUrl = getSyncUrl();
+  const syncHtml = `
+    <div class="api-section">
+      <div class="api-section-label">🔗 구글시트 연동 (진행 상태 공유)</div>
+      <div class="api-row">
+        <span class="api-label">시트 주소</span>
+        <input class="api-input" id="syncUrlInput" type="text" value="${syncUrl}" placeholder="https://script.google.com/macros/s/.../exec">
+        <button class="save-btn" onclick="saveSyncUrl()">저장</button>
+      </div>
+      <div class="api-row">
+        <span class="api-label"></span>
+        <button class="save-btn" onclick="pullFromSheet(true)">⬇ 시트에서 불러오기</button>
+        <button class="save-btn" onclick="pushAllToSheet()">⬆ 전체 올리기</button>
+        <span class="sync-badge sync-${syncState}" id="syncBadge">${syncMessage || (syncUrl ? '연동됨' : '미연동 — 이 브라우저에만 저장됩니다')}</span>
+      </div>
+    </div>`;
+
   const apiHtml = `
     <div class="api-section">
       <div class="api-section-label">⚙️ Claude API 설정</div>
@@ -16656,6 +16779,7 @@ function renderArea() {
           </div>
         </div>
       </div>
+      ${syncHtml}
       ${apiHtml}
       ${generateBtnHtml}
       ${cardHtml}
@@ -16668,6 +16792,7 @@ function renderArea() {
       ${statusBarHtml}
       ${cardHtml}
       ${newsHtml}
+      ${syncHtml}
       ${apiHtml}
       ${generateBtnHtml}
     `;
@@ -16946,6 +17071,13 @@ function downloadCsv() {
 // Init
 // ═══════════════════════════════════════════════════════
 renderList();
+
+// 시트가 연동돼 있으면 페이지 열 때 자동으로 최신 기록 불러오기
+if (getSyncUrl()) {
+  pullFromSheet(false);
+} else {
+  syncState = 'off';
+}
 </script>
 </body>
 </html>
