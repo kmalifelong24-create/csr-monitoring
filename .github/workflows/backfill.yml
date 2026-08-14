@@ -1,0 +1,38 @@
+name: 아카이브 일괄 복구 (1회용)
+
+# 수동 실행 전용 — Actions 탭에서 Run workflow 버튼으로 돌립니다.
+on:
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 저장소 체크아웃 (전체 히스토리)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # ← 과거 커밋을 읽어야 하므로 필수
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 의존성 설치
+        run: pip install feedparser
+
+      - name: 과거 수집분 복구
+        run: python backfill_archive.py
+
+      - name: 변경사항 커밋 & 푸시
+        run: |
+          git config --global user.name 'CSR Monitor Bot'
+          git config --global user.email 'csr-bot@github-actions'
+          git add index.html
+          git diff --staged --quiet && echo "변경사항 없음" || (
+            git commit -m "📦 아카이브 일괄 복구: $(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M') KST"
+            git push
+          )
