@@ -215,6 +215,132 @@ def generate_track_when(type_, status):
 def make_id(company, title):
     return hashlib.md5(f"{company}{title}".encode()).hexdigest()[:8]
 
+# ── 제안 타이밍 날짜 계산 ────────────────────────────────────────────────
+def add_months(d, months):
+    """날짜에 개월 수 더하기 (말일 보정)"""
+    y = d.year + (d.month - 1 + months) // 12
+    mth = (d.month - 1 + months) % 12 + 1
+    import calendar as _cal
+    day = min(d.day, _cal.monthrange(y, mth)[1])
+    return d.replace(year=y, month=mth, day=day)
+
+def compute_timing(item_date, type_, status, title, summary):
+    """
+    캘린더에 찍을 실제 날짜를 계산한다.
+    반환: (actionDate, nextCycle, timingLabel)
+      actionDate  — KMA가 움직여야 하는 날 (캘린더에 표시되는 날짜)
+      nextCycle   — 다음 공고·재계약 예상 시점 (없을 수 있음)
+      timingLabel — 캘린더에 뜨는 짧은 문구
+    """
+    try:
+        d = datetime.strptime(item_date, '%Y-%m-%d')
+    except Exception:
+        return (None, None, '')
+
+    text = (title or '') + ' ' + (summary or '')
+    annual = any(w in text for w in ['연간', '년도', '2026', '2027', '차년도'])
+    partnership = any(w in text for w in ['협약', '파트너십', '위탁', 'MOU', '업무협약'])
+
+    # ① 현재 진행 중인 모집·입찰 → 즉시 대응
+    if status == 'open' and type_ in ('recruit', 'tender'):
+        return (d.strftime('%Y-%m-%d'), None, '즉시 검토 — 모집 진행 중')
+
+    # ② 마감된 연간 사업 모집 → 다음 회차 3개월 전에 선제 제안
+    if type_ == 'recruit' and annual:
+        nxt = add_months(d, 11)
+        act = add_months(d, 8)
+        return (act.strftime('%Y-%m-%d'), nxt.strftime('%Y-%m-%d'), '제안서 선제 발송')
+
+    # ③ 일반 모집 마감 → 다음 공모 전 준비
+    if type_ == 'recruit':
+        nxt = add_months(d, 9)
+        act = add_months(d, 6)
+        return (act.strftime('%Y-%m-%d'), nxt.strftime('%Y-%m-%d'), '다음 공모 대비 준비')
+
+    # ④ 입찰 → 통상 1년 주기
+    if type_ == 'tender':
+        nxt = add_months(d, 12)
+        act = add_months(d, 9)
+        return (act.strftime('%Y-%m-%d'), nxt.strftime('%Y-%m-%d'), '차기 입찰 준비')
+
+    # ⑤ 협약·위탁 체결 뉴스 → 계약 종료 전 대안 파트너 제안
+    if partnership:
+        nxt = add_months(d, 12)
+        act = add_months(d, 9)
+        return (act.strftime('%Y-%m-%d'), nxt.strftime('%Y-%m-%d'), '재계약 전 대안 제안')
+
+    # ⑥ 일반 뉴스 → 다음 사업 기획 시점에 컨텍
+    act = add_months(d, 4)
+    return (act.strftime('%Y-%m-%d'), None, '사업 기획 시점 컨텍')
+
+# ── 주요 이슈 판정 ───────────────────────────────────────────────────────
+# 제안과 직접 맞닿은 신호일수록 높은 점수
+STRONG_SIGNALS = [
+    (['운영기관', '수행기관', '위탁운영', '위탁 운영', '협력기관', '참여기관'], 45, '운영·수행기관 모집'),
+    (['입찰', '나라장터', '용역 공고', '낙찰'], 45, '입찰 공고'),
+    (['공모', '공개모집', '공개 모집'], 30, '공모 진행'),
+    (['위탁', '민간위탁'], 30, '위탁 사업'),
+    (['협약', '업무협약', 'MOU', '파트너십'], 27, '협약 체결 — 재계약 시점 추적'),
+    (['선정', '선정돼', '선정됐'], 27, '수행기관 선정 — 계약 주기 파악'),
+    (['사업 개편', '신규 사업', '사업 확대', '확대 운영', '신설'], 25, '사업 방향 변화'),
+]
+WEAK_SIGNALS = [
+    (['기탁', '전달식', '성료', '수여식', '개최', '발대식'], -18, ''),
+    (['봉사', '캠페인', '체험행사'], -12, ''),
+]
+KEY_ISSUE_THRESHOLD = 45
+
+def score_item(type_, status, title, summary):
+    """(점수, 사유) 반환. 사유는 주요 이슈로 뽑힌 근거."""
+    text = (title or '') + ' ' + (summary or '')
+    score = 0
+    reasons = []
+
+    if type_ == 'tender':
+        score += 25
+    elif type_ == 'recruit':
+        score += 20
+    else:
+        score += 3
+
+    if status == 'open':
+        score += 15
+
+    for words, pts, label in STRONG_SIGNALS:
+        if any(w in text for w in words):
+            score += pts
+            if label:
+                reasons.append(label)
+            break
+
+    for words, pts, _ in WEAK_SIGNALS:
+        if any(w in text for w in words):
+            score += pts
+            break
+
+    if not reasons:
+        reasons.append('모집·공고 관련' if type_ != 'news' else '동향 참고')
+
+    return max(score, 0), ' · '.join(reasons[:2])
+
+def enrich(item):
+    """항목에 타이밍·점수 필드를 채워 넣는다 (기존 항목도 매 실행 시 갱신)."""
+    act, nxt, label = compute_timing(
+        item.get('date', ''), item.get('type', 'news'),
+        item.get('status', 'open'), item.get('title', ''), item.get('summary', '')
+    )
+    score, reason = score_item(
+        item.get('type', 'news'), item.get('status', 'open'),
+        item.get('title', ''), item.get('summary', '')
+    )
+    item['actionDate'] = act
+    item['nextCycle'] = nxt
+    item['timingLabel'] = label
+    item['keyScore'] = score
+    item['keyReason'] = reason
+    item['isKey'] = score >= KEY_ISSUE_THRESHOLD
+    return item
+
 # ── 아카이브 병합 ────────────────────────────────────────────────────────
 def merge_into_archive(existing_archive, items):
     """items를 주간 그룹으로 묶어 기존 아카이브에 병합(중복 제외)"""
@@ -328,8 +454,13 @@ def run():
             add_item(matched, r)
         time.sleep(0.5)
 
-    # ③ 정렬 후 정원 적용 — 밀려난 항목도 아카이브로 보낸다 (핵심 수정)
-    all_findings = current_findings + new_findings
+    # ③ 전 항목에 타이밍·주요이슈 필드 갱신 (기존 항목 포함해 매번 재계산)
+    all_findings = [enrich(f) for f in (current_findings + new_findings)]
+    aged_out = [enrich(f) for f in aged_out]
+    key_cnt = sum(1 for f in all_findings if f.get('isKey'))
+    print(f"주요 이슈로 분류: {key_cnt}건 / 전체 {len(all_findings)}건")
+
+    # 정렬 후 정원 적용 — 밀려난 항목도 아카이브로 보낸다 (핵심 수정)
     open_items = sorted([f for f in all_findings if f.get('status') == 'open'],
                         key=lambda x: x.get('date', ''), reverse=True)
     other_items = sorted([f for f in all_findings if f.get('status') != 'open'],
