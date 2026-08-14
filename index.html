@@ -32,10 +32,10 @@
   .layout { display: grid; grid-template-columns: 2fr 1fr 0.5fr; gap: 12px; padding: 10px 24px 12px; flex: 1; min-height: 0; }
 
   /* ── 가운데 열: 캘린더 + 주요 이슈 ── */
-  .mid-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-  .mid-col .panel { flex: none; }
-  .cal-panel { flex: none; }
-  .key-panel { flex: 1 1 auto; min-height: 0; }
+  .layout > * { min-height: 0; }
+  .mid-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
+  .mid-col > .cal-panel { flex: 0 0 auto; }
+  .mid-col > .key-panel { flex: 1 1 0; min-height: 120px; overflow: hidden; }
 
   .cal-nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
   .cal-nav button { width: 22px; height: 22px; border: 1px solid #e5e8f0; background: #fff; border-radius: 6px; cursor: pointer; color: #666; font-size: 13px; line-height: 1; padding: 0; }
@@ -61,7 +61,8 @@
   .cal-chip.urgent { background: #fecaca; color: #991b1b; }
   .cal-more { font-size: 9px; color: #94a3b8; }
 
-  .cal-detail { border-top: 1px solid #f0f2f8; padding: 9px 12px; max-height: 190px; overflow-y: auto; }
+  .cal-detail { border-top: 1px solid #f0f2f8; padding: 9px 12px; max-height: 150px; overflow-y: auto; flex-shrink: 0; }
+  .cal-wrap { flex-shrink: 0; }
   .cal-detail-empty { font-size: 11px; color: #b0b8c8; text-align: center; padding: 10px 0; }
   .cal-detail-head { font-size: 11px; font-weight: 800; color: #4338ca; margin-bottom: 6px; }
   .cal-ev { border-left: 2px solid #c7d2fe; padding: 4px 0 4px 8px; margin-bottom: 6px; }
