@@ -324,15 +324,26 @@ def score_item(type_, status, title, summary):
     return max(score, 0), ' · '.join(reasons[:2])
 
 def enrich(item):
-    """항목에 타이밍·점수 필드를 채워 넣는다 (기존 항목도 매 실행 시 갱신)."""
-    act, nxt, label = compute_timing(
-        item.get('date', ''), item.get('type', 'news'),
-        item.get('status', 'open'), item.get('title', ''), item.get('summary', '')
-    )
-    score, reason = score_item(
-        item.get('type', 'news'), item.get('status', 'open'),
-        item.get('title', ''), item.get('summary', '')
-    )
+    """
+    항목에 타이밍·점수 필드를 채워 넣는다 (기존 항목도 매 실행 시 갱신).
+
+    중요: status를 게시일 기준으로 매번 다시 판정한다.
+    수집 당시 '모집 중'이던 공고가 시간이 지나도 계속 '모집 중'으로 남아
+    캘린더·주요이슈를 오염시키는 것을 막는다.
+    """
+    title = item.get('title', '')
+    summary = item.get('summary', '')
+    type_ = item.get('type', 'news')
+    date_ = item.get('date', '')
+
+    try:
+        item['status'] = classify_status(title, summary, date_)
+    except Exception:
+        item['status'] = item.get('status', 'closed')
+    status = item['status']
+
+    act, nxt, label = compute_timing(date_, type_, status, title, summary)
+    score, reason = score_item(type_, status, title, summary)
     item['actionDate'] = act
     item['nextCycle'] = nxt
     item['timingLabel'] = label
