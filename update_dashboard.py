@@ -1,215 +1,72 @@
 """
 CSR 공고 모니터링 — 자동 업데이트 스크립트
 매일 GitHub Actions로 실행되어 뉴스를 수집하고 index.html을 갱신합니다.
-- 7일 이내 항목: FINDINGS (메인 피드)
-- 7일 이상 항목: ARCHIVE (주간 그룹화, 최대 26주 보관)
+
+[아카이브 정책]
+- 메인 피드(FINDINGS)는 최대 MAX_FEED건 유지
+- 아카이브로 넘어가는 경우 두 가지:
+  (1) 게시일이 ARCHIVE_AFTER_DAYS일 지난 항목
+  (2) 메인 피드 정원(MAX_FEED)에서 밀려난 항목  ← 이전 버전에서 누락되어 유실되던 부분
+- 아카이브는 주간 단위로 그룹화, 최대 ARCHIVE_WEEKS주 보관
 """
 
 import feedparser
 import json
 import re
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import time
 
-# ── 모니터링 대상 기업 (194개) ───────────────────────────────────────────
-# 기업명에 " / "가 있으면 앞쪽 이름으로 검색, 뒤 이름은 표시용
+# ── 설정 ────────────────────────────────────────────────────────────────
+MAX_FEED = 60            # 메인 피드 최대 건수
+ARCHIVE_AFTER_DAYS = 7   # 며칠 지나면 아카이브로 보낼지
+ARCHIVE_WEEKS = 26       # 아카이브 보관 주 수 (약 6개월)
+KST = timezone(timedelta(hours=9))
+
+# ── 모니터링 대상 기업 ──────────────────────────────────────────────────
 COMPANIES = [
-    {"name": "삼성전자"},
-    {"name": "LG전자"},
-    {"name": "네이버 커넥트재단"},
-    {"name": "카카오임팩트 재단"},
-    {"name": "국민은행"},
-    {"name": "우리은행"},
-    {"name": "현대자동차그룹"},
-    {"name": "기아"},
-    {"name": "한국전력공사"},
-    {"name": "한국가스공사"},
-    {"name": "아산나눔재단"},
-    {"name": "현대차 정몽구 재단"},
-    {"name": "SK행복나눔재단"},
-    {"name": "KT그룹희망나눔재단"},
-    {"name": "포스코청암재단"},
-    {"name": "CJ나눔재단"},
-    {"name": "신한희망재단"},
-    {"name": "교보교육재단"},
-    {"name": "하나금융그룹 / 하나금융나눔재단"},
-    {"name": "IBK행복나눔재단"},
-    {"name": "iM사회공헌재단(DGB금융그룹)"},
-    {"name": "NH농협은행"},
-    {"name": "신용카드사회공헌재단"},
-    {"name": "KRX국민행복재단"},
-    {"name": "롯데장학재단"},
-    {"name": "미래에셋박현주재단"},
-    {"name": "넥슨재단"},
-    {"name": "CJ올리브네트웍스"},
-    {"name": "롯데이노베이트"},
-    {"name": "HD현대1%나눔재단 / HD현대"},
-    {"name": "GS칼텍스"},
-    {"name": "LS그룹"},
-    {"name": "NC문화재단"},
-    {"name": "스마일게이트 희망스튜디오 / 퓨처랩"},
-    {"name": "넷마블문화재단"},
-    {"name": "웹젠"},
-    {"name": "KT&G장학재단"},
-    {"name": "BNK금융그룹 / BNK부산은행"},
-    {"name": "신협사회공헌재단"},
-    {"name": "새마을금고중앙회 / MG지역희망나눔재단"},
-    {"name": "두산연강재단"},
-    {"name": "유한재단"},
-    {"name": "한화그룹"},
-    {"name": "현대백화점사회복지재단"},
-    {"name": "이랜드재단 / 이랜드복지재단"},
-    {"name": "메르세데스-벤츠 사회공헌위원회"},
-    {"name": "BMW 코리아 미래재단"},
-    {"name": "폭스바겐그룹코리아 / Volkswagen Group WE: Foundation"},
-    {"name": "생명보험사회공헌재단"},
-    {"name": "두나무"},
-    {"name": "LG유플러스"},
-    {"name": "코스콤"},
-    {"name": "크래프톤"},
-    {"name": "미래엔"},
-    {"name": "대교문화재단"},
-    {"name": "아모레퍼시픽재단"},
-    {"name": "메트라이프생명 사회공헌재단"},
-    {"name": "라이나전성기재단"},
-    {"name": "DB김준기문화재단"},
-    {"name": "우아한형제들"},
-    {"name": "토스"},
-    {"name": "한국마이크로소프트"},
-    {"name": "AWS코리아"},
-    {"name": "IBM코리아"},
-    {"name": "일주학술문화재단"},
-    {"name": "세아해암학술장학재단"},
-    {"name": "우정교육문화재단"},
-    {"name": "호반장학재단"},
-    {"name": "종근당고촌재단"},
-    {"name": "한세예스24문화재단"},
-    {"name": "오뚜기함태호재단"},
-    {"name": "대상문화재단"},
-    {"name": "S-OIL"},
-    {"name": "효성"},
-    {"name": "코오롱그룹"},
-    {"name": "동아쏘시오홀딩스"},
-    {"name": "GC녹십자"},
-    {"name": "셀트리온복지재단"},
-    {"name": "보령"},
-    {"name": "한미약품"},
-    {"name": "한국콜마"},
-    {"name": "쿠팡"},
-    {"name": "당근"},
-    {"name": "야놀자"},
-    {"name": "구글코리아"},
-    {"name": "시스코코리아"},
-    {"name": "인텔코리아"},
-    {"name": "퀄컴코리아"},
-    {"name": "SAP코리아"},
-    {"name": "세일즈포스코리아"},
-    {"name": "어플라이드 머티어리얼즈 코리아"},
-    {"name": "지멘스코리아"},
-    {"name": "보쉬코리아"},
-    {"name": "SK하이닉스"},
-    {"name": "대한항공"},
-    {"name": "SK텔레콤"},
-    {"name": "SK브로드밴드"},
-    {"name": "삼성SDS"},
-    {"name": "LG CNS"},
-    {"name": "LG디스플레이"},
-    {"name": "LG이노텍"},
-    {"name": "안랩"},
-    {"name": "엔씨소프트"},
-    {"name": "NHN"},
-    {"name": "컴투스"},
-    {"name": "위메이드"},
-    {"name": "펄어비스"},
-    {"name": "카카오게임즈"},
-    {"name": "데브시스터즈"},
-    {"name": "네오위즈"},
-    {"name": "SOOP"},
-    {"name": "티맥스그룹"},
-    {"name": "더존비즈온"},
-    {"name": "LG에너지솔루션"},
-    {"name": "LG화학"},
-    {"name": "SKC"},
-    {"name": "DB하이텍"},
-    {"name": "한미반도체"},
-    {"name": "원익그룹"},
-    {"name": "주성엔지니어링"},
-    {"name": "동진쎄미켐"},
-    {"name": "심텍"},
-    {"name": "해성디에스"},
-    {"name": "LS일렉트릭"},
-    {"name": "대한전선"},
-    {"name": "두산에너빌리티"},
-    {"name": "현대모비스"},
-    {"name": "현대글로비스"},
-    {"name": "현대제철"},
-    {"name": "현대건설"},
-    {"name": "HL만도"},
-    {"name": "HL홀딩스"},
-    {"name": "한국타이어앤테크놀로지"},
-    {"name": "금호타이어"},
-    {"name": "넥센타이어"},
-    {"name": "르노코리아"},
-    {"name": "GM한국사업장"},
-    {"name": "KG모빌리티"},
-    {"name": "CJ대한통운"},
-    {"name": "한진"},
-    {"name": "제주항공"},
-    {"name": "삼성생명"},
-    {"name": "삼성화재"},
-    {"name": "삼성카드"},
-    {"name": "현대해상"},
-    {"name": "현대카드"},
-    {"name": "한화생명"},
-    {"name": "한화손해보험"},
-    {"name": "AIA생명"},
-    {"name": "처브라이프생명"},
-    {"name": "흥국생명"},
-    {"name": "흥국화재"},
-    {"name": "롯데카드"},
-    {"name": "비씨카드"},
-    {"name": "한국투자증권"},
-    {"name": "GS리테일"},
-    {"name": "롯데백화점"},
-    {"name": "롯데칠성음료"},
-    {"name": "신세계백화점"},
-    {"name": "이마트"},
-    {"name": "신세계인터내셔날"},
-    {"name": "신세계푸드"},
-    {"name": "현대그린푸드"},
-    {"name": "BGF리테일"},
-    {"name": "코리아세븐"},
-    {"name": "상미당 (SPC그룹)"},
-    {"name": "CJ제일제당"},
-    {"name": "CJ푸드빌"},
-    {"name": "CJ ENM"},
-    {"name": "CJ CGV"},
-    {"name": "농심"},
-    {"name": "GS그룹"},
-    {"name": "GS파워"},
-    {"name": "SK이노베이션"},
-    {"name": "SK E&S"},
-    {"name": "SK네트웍스"},
-    {"name": "한화솔루션"},
-    {"name": "한화에어로스페이스"},
-    {"name": "한화시스템"},
-    {"name": "두산밥캣"},
-    {"name": "교원그룹"},
-    {"name": "바인그룹"},
-    {"name": "한국지역난방공사"},
-    {"name": "한국공항공사"},
-    {"name": "천재교육"},
-    {"name": "한국도로공사"},
-    {"name": "SK에코플랜트 머티리얼즈"},
-    {"name": "풀무원재단"},
-    {"name": "대웅제약 / 대웅재단"},
-    {"name": "KCC글라스"},
-    {"name": "동서식품"},
-    {"name": "자생의료재단"},
-    {"name": "한솔교육희망재단"},
-    {"name": "다음세대재단"},
+    {"name": "국민은행", "priority": "high"},
+    {"name": "우리은행", "priority": "high"},
+    {"name": "현대자동차그룹", "priority": "high"},
+    {"name": "KT그룹희망나눔재단", "priority": "high"},
+    {"name": "CJ나눔재단", "priority": "high"},
+    {"name": "신한희망재단", "priority": "high"},
+    {"name": "교보교육재단", "priority": "high"},
+    {"name": "하나금융그룹", "priority": "high"},
+    {"name": "IBK행복나눔재단", "priority": "high"},
+    {"name": "iM사회공헌재단", "priority": "high"},
+    {"name": "NH농협은행", "priority": "high"},
+    {"name": "신용카드사회공헌재단", "priority": "high"},
+    {"name": "KRX국민행복재단", "priority": "high"},
+    {"name": "롯데장학재단", "priority": "high"},
+    {"name": "미래에셋박현주재단", "priority": "high"},
+    {"name": "CJ올리브네트웍스", "priority": "high"},
+    {"name": "롯데이노베이트", "priority": "high"},
+    {"name": "HD현대1%나눔재단", "priority": "high"},
+    {"name": "GS칼텍스", "priority": "high"},
+    {"name": "LS그룹", "priority": "high"},
+    {"name": "KT&G장학재단", "priority": "high"},
+    {"name": "BNK금융그룹", "priority": "high"},
+    {"name": "신협사회공헌재단", "priority": "high"},
+    {"name": "새마을금고중앙회", "priority": "high"},
+    {"name": "현대백화점사회복지재단", "priority": "high"},
+    {"name": "이랜드재단", "priority": "high"},
+    {"name": "삼성전자", "priority": "cond"},
+    {"name": "LG전자", "priority": "cond"},
+    {"name": "네이버 커넥트재단", "priority": "cond"},
+    {"name": "카카오임팩트재단", "priority": "cond"},
+    {"name": "넥슨재단", "priority": "cond"},
+    {"name": "NC문화재단", "priority": "cond"},
+    {"name": "스마일게이트 희망스튜디오", "priority": "cond"},
+    {"name": "넷마블문화재단", "priority": "cond"},
+    {"name": "한화그룹", "priority": "cond"},
+    {"name": "SK행복나눔재단", "priority": "cond"},
+    {"name": "포스코청암재단", "priority": "cond"},
+    {"name": "아산나눔재단", "priority": "cond"},
+    {"name": "현대차 정몽구 재단", "priority": "cond"},
+    {"name": "BMW 코리아 미래재단", "priority": "cond"},
+    {"name": "메르세데스-벤츠 사회공헌위원회", "priority": "cond"},
 ]
 
 # ── 검색 키워드 ──────────────────────────────────────────────────────────
@@ -232,7 +89,6 @@ GENERAL_KEYWORDS = [
 ]
 
 # ── 관련성 필터 ───────────────────────────────────────────────────────────
-# 최소 하나 포함되어야 수집 (교육·인재육성 관련)
 INCLUDE_KEYWORDS = [
     '교육', '인재육성', '멘토링', '격차해소', '학습지원', '역량강화', '평생학습',
     '학습', '훈련', '코딩', 'AI교육', 'AI 교육', '디지털교육', '디지털 교육',
@@ -241,7 +97,6 @@ INCLUDE_KEYWORDS = [
     '인재 양성', '능력개발', '직무교육', '리터러시',
 ]
 
-# 하나라도 포함되면 제외
 EXCLUDE_KEYWORDS = [
     '가전', '구독', '여행', '봉사단', '인턴', '채용', '취업', '입사지원',
     '구매', '할인', '이벤트', '경품', '추첨', '공연', '전시', '박람회',
@@ -253,11 +108,9 @@ EXCLUDE_KEYWORDS = [
 def is_relevant(title, summary):
     """교육/인재육성 관련 여부 판단"""
     text = title + ' ' + summary
-    # 제외 키워드 우선 체크
     for kw in EXCLUDE_KEYWORDS:
         if kw in text:
             return False
-    # 포함 키워드 최소 1개 필요
     for kw in INCLUDE_KEYWORDS:
         if kw in text:
             return True
@@ -362,12 +215,43 @@ def generate_track_when(type_, status):
 def make_id(company, title):
     return hashlib.md5(f"{company}{title}".encode()).hexdigest()[:8]
 
+# ── 아카이브 병합 ────────────────────────────────────────────────────────
+def merge_into_archive(existing_archive, items):
+    """items를 주간 그룹으로 묶어 기존 아카이브에 병합(중복 제외)"""
+    existing_ids = set()
+    for week_entry in existing_archive:
+        for it in week_entry.get('items', []):
+            existing_ids.add(it.get('id', ''))
+
+    week_groups = {}
+    for item in items:
+        iid = item.get('id')
+        if not iid or iid in existing_ids:
+            continue
+        existing_ids.add(iid)  # 같은 배치 내 중복도 차단
+        week = get_week_range(item.get('date', ''))
+        week_groups.setdefault(week, []).append(item)
+
+    new_archive = [dict(w, items=list(w.get('items', []))) for w in existing_archive]
+    for week, group in week_groups.items():
+        found = next((w for w in new_archive if w['week'] == week), None)
+        if found:
+            found['items'].extend(group)
+        else:
+            new_archive.append({'week': week, 'items': group})
+
+    # 각 주 내부는 최신순 정렬
+    for w in new_archive:
+        w['items'].sort(key=lambda x: x.get('date', ''), reverse=True)
+
+    new_archive.sort(key=lambda x: x['week'], reverse=True)
+    return new_archive[:ARCHIVE_WEEKS]
+
 # ── 메인 ────────────────────────────────────────────────────────────────
 def run():
-    now = datetime.now()
-    print(f"[{now.strftime('%Y-%m-%d %H:%M')}] CSR 모니터링 시작")
+    now = datetime.now(KST)
+    print(f"[{now.strftime('%Y-%m-%d %H:%M')} KST] CSR 모니터링 시작")
 
-    # 기존 HTML에서 데이터 추출
     with open('index.html', 'r', encoding='utf-8') as f:
         html = f.read()
 
@@ -375,151 +259,97 @@ def run():
     existing_archive = extract_js_array(html, 'ARCHIVE', '// ARCHIVE_START', '// ARCHIVE_END')
     print(f"기존 FINDINGS: {len(old_findings)}건, 아카이브: {len(existing_archive)}주")
 
-    # 7일 이상 된 항목 → 아카이브로 분리
-    cutoff = now - timedelta(days=7)
-    to_archive = []
+    # ① 오래된 항목 분리
+    cutoff = now.replace(tzinfo=None) - timedelta(days=ARCHIVE_AFTER_DAYS)
+    aged_out = []
     current_findings = []
     for item in old_findings:
         try:
             fd = datetime.strptime(item['date'], '%Y-%m-%d')
             if fd < cutoff:
-                to_archive.append(item)
+                aged_out.append(item)
             else:
                 current_findings.append(item)
         except Exception:
             current_findings.append(item)
-    print(f"아카이브 이동: {len(to_archive)}건, 유지: {len(current_findings)}건")
+    print(f"기간 경과({ARCHIVE_AFTER_DAYS}일) 아카이브 대상: {len(aged_out)}건, 유지: {len(current_findings)}건")
 
-    # 기존 아카이브 ID 수집 (중복 방지)
-    existing_ids = set()
-    for week_entry in existing_archive:
-        for item in week_entry.get('items', []):
-            existing_ids.add(item.get('id', ''))
-
-    # 새 아카이브 항목 주간 그룹화 후 병합
-    week_groups = {}
-    for item in to_archive:
-        if item.get('id') in existing_ids:
-            continue
-        week = get_week_range(item['date'])
-        week_groups.setdefault(week, []).append(item)
-
-    new_archive = list(existing_archive)
-    for week, items in week_groups.items():
-        existing_week = next((w for w in new_archive if w['week'] == week), None)
-        if existing_week:
-            existing_week['items'].extend(items)
-        else:
-            new_archive.append({'week': week, 'items': items})
-
-    # 날짜 역순 정렬, 최대 26주(약 6개월) 보관
-    new_archive.sort(key=lambda x: x['week'], reverse=True)
-    new_archive = new_archive[:26]
-
-    # 새 뉴스 수집
+    # ② 새 뉴스 수집
     seen_ids = set(f.get('id') for f in current_findings)
     new_findings = []
 
-    # 전체 기업 개별 검색
-    for company in COMPANIES:
-        # 검색명: " / " 구분자가 있으면 앞쪽 이름 사용
-        search_name = company['name'].split(' / ')[0].strip()
+    def add_item(company, r):
+        fid = make_id(company, r['title'])
+        if fid in seen_ids:
+            return
+        seen_ids.add(fid)
+        t = classify_type(r['title'], r['summary'])
+        s = classify_status(r['title'], r['summary'], r['date'])
+        new_findings.append({
+            'id': fid, 'company': company,
+            'type': t, 'status': s,
+            'title': r['title'], 'summary': r['summary'],
+            'date': r['date'], 'deadline': None, 'url': r['url'],
+            'isNew': True,
+            'trackNote': generate_track_note(company, t, r['title'], r['summary']),
+            'trackWhen': generate_track_when(t, s),
+        })
+
+    # 우선순위 기업 개별 검색
+    for company in [c for c in COMPANIES if c['priority'] == 'high']:
         for kw in COMPANY_KEYWORDS:
-            query = f"{search_name} {kw}"
+            query = f"{company['name']} {kw}"
             print(f"  검색: {query[:45]}")
-            results = fetch_google_news(query, days=45, max_results=3)
-            for r in results:
+            for r in fetch_google_news(query, days=45, max_results=3):
                 if not is_relevant(r['title'], r['summary']):
-                    print(f"    제외: {r['title'][:40]}")
                     continue
-                fid = make_id(company['name'], r['title'])
-                if fid in seen_ids:
-                    continue
-                seen_ids.add(fid)
-                t = classify_type(r['title'], r['summary'])
-                s = classify_status(r['title'], r['summary'], r['date'])
-                new_findings.append({
-                    'id': fid,
-                    'company': company['name'],
-                    'type': t, 'status': s,
-                    'title': r['title'], 'summary': r['summary'],
-                    'date': r['date'], 'deadline': None, 'url': r['url'],
-                    'isNew': True,
-                    'trackNote': generate_track_note(company['name'], t, r['title'], r['summary']),
-                    'trackWhen': generate_track_when(t, s),
-                })
+                add_item(company['name'], r)
             time.sleep(0.5)
 
-    # 기업명 기반 일반 키워드 검색 (교육사업 공모 위주)
-    for company in COMPANIES:
-        search_name = company['name'].split(' / ')[0].strip()
-        query = f"{search_name} 교육사업 인재육성 모집 2026"
-        results = fetch_google_news(query, days=30, max_results=2)
-        for r in results:
+    # 조건부 기업 통합 검색
+    for company in [c for c in COMPANIES if c['priority'] == 'cond']:
+        query = f"{company['name']} 교육사업 인재육성 모집 2026"
+        for r in fetch_google_news(query, days=30, max_results=2):
             if not is_relevant(r['title'], r['summary']):
-                print(f"    제외: {r['title'][:40]}")
                 continue
-            fid = make_id(company['name'], r['title'])
-            if fid in seen_ids:
-                continue
-            seen_ids.add(fid)
-            t = classify_type(r['title'], r['summary'])
-            s = classify_status(r['title'], r['summary'], r['date'])
-            new_findings.append({
-                'id': fid, 'company': company['name'],
-                'type': t, 'status': s,
-                'title': r['title'], 'summary': r['summary'],
-                'date': r['date'], 'deadline': None, 'url': r['url'],
-                'isNew': True,
-                'trackNote': generate_track_note(company['name'], t, r['title'], r['summary']),
-                'trackWhen': generate_track_when(t, s),
-            })
+            add_item(company['name'], r)
         time.sleep(0.5)
 
     # 통합 키워드 검색
     company_names = [c['name'] for c in COMPANIES]
     for query in GENERAL_KEYWORDS:
         print(f"  통합 검색: {query[:45]}")
-        results = fetch_google_news(query, days=14, max_results=5)
-        for r in results:
+        for r in fetch_google_news(query, days=14, max_results=5):
             if not is_relevant(r['title'], r['summary']):
-                print(f"    제외: {r['title'][:40]}")
                 continue
             matched = next((n for n in company_names if n.split('/')[0].strip() in r['title'] + r['summary']), None)
             if not matched:
                 continue
-            fid = make_id(matched, r['title'])
-            if fid in seen_ids:
-                continue
-            seen_ids.add(fid)
-            t = classify_type(r['title'], r['summary'])
-            s = classify_status(r['title'], r['summary'], r['date'])
-            new_findings.append({
-                'id': fid, 'company': matched,
-                'type': t, 'status': s,
-                'title': r['title'], 'summary': r['summary'],
-                'date': r['date'], 'deadline': None, 'url': r['url'],
-                'isNew': True,
-                'trackNote': generate_track_note(matched, t, r['title'], r['summary']),
-                'trackWhen': generate_track_when(t, s),
-            })
+            add_item(matched, r)
         time.sleep(0.5)
 
-    # 병합 및 정렬 (open 먼저, 최신순)
+    # ③ 정렬 후 정원 적용 — 밀려난 항목도 아카이브로 보낸다 (핵심 수정)
     all_findings = current_findings + new_findings
-    all_findings.sort(key=lambda x: (0 if x['status'] == 'open' else 1, x['date']), reverse=True)
-    # open은 위로, 같은 status 내 최신순이 되도록 재정렬
-    open_items = sorted([f for f in all_findings if f['status'] == 'open'], key=lambda x: x['date'], reverse=True)
-    other_items = sorted([f for f in all_findings if f['status'] != 'open'], key=lambda x: x['date'], reverse=True)
-    all_findings = (open_items + other_items)[:60]
+    open_items = sorted([f for f in all_findings if f.get('status') == 'open'],
+                        key=lambda x: x.get('date', ''), reverse=True)
+    other_items = sorted([f for f in all_findings if f.get('status') != 'open'],
+                         key=lambda x: x.get('date', ''), reverse=True)
+    merged = open_items + other_items
 
-    print(f"\n수집 완료: FINDINGS {len(all_findings)}건, 아카이브 {sum(len(w['items']) for w in new_archive)}건")
+    kept_findings = merged[:MAX_FEED]
+    overflow = merged[MAX_FEED:]          # ← 이전에는 그냥 버려지던 항목들
+    print(f"정원({MAX_FEED}) 초과로 아카이브 이동: {len(overflow)}건")
 
-    # index.html 업데이트
-    findings_json = json.dumps(all_findings, ensure_ascii=False, indent=2)
+    # ④ 아카이브 병합 (기간 경과분 + 정원 초과분)
+    new_archive = merge_into_archive(existing_archive, aged_out + overflow)
+    archived_total = sum(len(w['items']) for w in new_archive)
+    print(f"\n수집 완료: FINDINGS {len(kept_findings)}건, 아카이브 {archived_total}건 / {len(new_archive)}주")
+
+    # ⑤ index.html 갱신
+    findings_json = json.dumps(kept_findings, ensure_ascii=False, indent=2)
     new_findings_block = (
         f"// FINDINGS_START\n"
-        f"// AUTO-UPDATED: {now.strftime('%Y-%m-%d %H:%M KST')}\n"
+        f"// AUTO-UPDATED: {now.strftime('%Y-%m-%d %H:%M')} KST\n"
         f"const FINDINGS = {findings_json};\n"
         f"// FINDINGS_END"
     )
@@ -531,8 +361,8 @@ def run():
         f"// ARCHIVE_END"
     )
 
-    html = re.sub(r'// FINDINGS_START[\s\S]*?// FINDINGS_END', new_findings_block, html)
-    html = re.sub(r'// ARCHIVE_START[\s\S]*?// ARCHIVE_END', new_archive_block, html)
+    html = re.sub(r'// FINDINGS_START[\s\S]*?// FINDINGS_END', lambda m: new_findings_block, html)
+    html = re.sub(r'// ARCHIVE_START[\s\S]*?// ARCHIVE_END', lambda m: new_archive_block, html)
 
     with open('index.html', 'w', encoding='utf-8') as f:
         f.write(html)
