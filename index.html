@@ -29,7 +29,68 @@
   .stat.purple .n { color: #8b5cf6; }
   .stat.blue .n { color: #3b82f6; }
   .stat.green .n { color: #22c55e; }
-  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 12px; padding: 10px 24px 12px; flex: 1; min-height: 0; }
+  .layout { display: grid; grid-template-columns: 2fr 1fr 0.5fr; gap: 12px; padding: 10px 24px 12px; flex: 1; min-height: 0; }
+
+  /* ── 가운데 열: 캘린더 + 주요 이슈 ── */
+  .mid-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .mid-col .panel { flex: none; }
+  .cal-panel { flex: none; }
+  .key-panel { flex: 1 1 auto; min-height: 0; }
+
+  .cal-nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .cal-nav button { width: 22px; height: 22px; border: 1px solid #e5e8f0; background: #fff; border-radius: 6px; cursor: pointer; color: #666; font-size: 13px; line-height: 1; padding: 0; }
+  .cal-nav button:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+  .cal-label { font-size: 12px; font-weight: 700; min-width: 78px; text-align: center; }
+  .cal-today-btn { font-size: 10px !important; width: auto !important; padding: 0 6px !important; }
+
+  .cal-wrap { padding: 8px 12px 10px; }
+  .cal-dow { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; margin-bottom: 3px; }
+  .cal-dow div { text-align: center; font-size: 10px; font-weight: 700; color: #94a3b8; padding: 2px 0; }
+  .cal-dow div:first-child { color: #ef4444; }
+  .cal-dow div:last-child { color: #3b82f6; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; }
+  .cal-cell { aspect-ratio: 1 / 0.86; border: 1px solid #f0f2f8; border-radius: 6px; padding: 3px 4px; font-size: 11px; color: #475569; cursor: default; display: flex; flex-direction: column; gap: 2px; overflow: hidden; background: #fff; }
+  .cal-cell.other { background: #fafbfd; color: #cbd5e1; }
+  .cal-cell.today { border-color: #3b82f6; box-shadow: inset 0 0 0 1px #3b82f6; }
+  .cal-cell.has { cursor: pointer; background: #fff7ed; border-color: #fed7aa; }
+  .cal-cell.has:hover { background: #ffedd5; }
+  .cal-cell.has.urgent { background: #fef2f2; border-color: #fecaca; }
+  .cal-cell.selected { outline: 2px solid #6366f1; outline-offset: -2px; }
+  .cal-daynum { font-weight: 700; font-size: 11px; }
+  .cal-chip { font-size: 9px; font-weight: 700; border-radius: 4px; padding: 1px 3px; background: #fed7aa; color: #9a3412; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-chip.urgent { background: #fecaca; color: #991b1b; }
+  .cal-more { font-size: 9px; color: #94a3b8; }
+
+  .cal-detail { border-top: 1px solid #f0f2f8; padding: 9px 12px; max-height: 190px; overflow-y: auto; }
+  .cal-detail-empty { font-size: 11px; color: #b0b8c8; text-align: center; padding: 10px 0; }
+  .cal-detail-head { font-size: 11px; font-weight: 800; color: #4338ca; margin-bottom: 6px; }
+  .cal-ev { border-left: 2px solid #c7d2fe; padding: 4px 0 4px 8px; margin-bottom: 6px; }
+  .cal-ev:last-child { margin-bottom: 0; }
+  .cal-ev-co { font-size: 11px; font-weight: 700; color: #3b82f6; }
+  .cal-ev-label { font-size: 11px; font-weight: 700; color: #7c3aed; margin: 1px 0 2px; }
+  .cal-ev-title { font-size: 11px; color: #475569; line-height: 1.45; }
+  .cal-ev-meta { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .cal-ev-meta a { color: #3b82f6; text-decoration: none; }
+
+  /* ── 주요 이슈 ── */
+  .key-filter { display: flex; gap: 4px; padding: 7px 12px; border-bottom: 1px solid #f0f2f8; flex-shrink: 0; }
+  .k-btn { padding: 3px 9px; border-radius: 6px; border: 1px solid #e5e8f0; background: #fff; font-size: 11px; cursor: pointer; color: #666; }
+  .k-btn.active { background: #7c3aed; border-color: #7c3aed; color: #fff; font-weight: 600; }
+  .key-list { flex: 1; overflow-y: auto; min-height: 0; }
+  .key-item { padding: 9px 12px; border-bottom: 1px solid #f5f6fa; }
+  .key-item:last-child { border-bottom: none; }
+  .key-item:hover { background: #fbfaff; }
+  .key-top { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; flex-wrap: wrap; }
+  .key-reason { font-size: 9px; font-weight: 800; background: #ede9fe; color: #6d28d9; padding: 1px 5px; border-radius: 4px; }
+  .key-dday { font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; background: #fee2e2; color: #991b1b; }
+  .key-dday.soon { background: #ffedd5; color: #9a3412; }
+  .key-dday.later { background: #f1f5f9; color: #64748b; }
+  .key-co { font-size: 11px; font-weight: 700; color: #3b82f6; }
+  .key-title { font-size: 12px; font-weight: 600; color: #1a1a2e; line-height: 1.42; margin-bottom: 3px; }
+  .key-note { font-size: 11px; color: #64748b; line-height: 1.5; background: #faf9ff; border-radius: 5px; padding: 5px 7px; }
+  .key-meta { display: flex; gap: 8px; font-size: 10px; color: #aaa; margin-top: 4px; }
+  .key-meta a { color: #3b82f6; text-decoration: none; }
+  .key-empty { padding: 26px 16px; text-align: center; color: #bbb; font-size: 12px; line-height: 1.6; }
   .panel { background: #fff; border-radius: 10px; border: 1px solid #e5e8f0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   .panel-head { padding: 10px 16px; border-bottom: 1px solid #f0f2f8; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .panel-head h2 { font-size: 13px; font-weight: 700; }
@@ -124,6 +185,39 @@
     </div>
     <div class="news-list" id="newsFeed"></div>
   </div>
+  <!-- 가운데: 캘린더 + 주요 이슈 -->
+  <div class="mid-col">
+    <div class="panel cal-panel">
+      <div class="panel-head">
+        <span>📅</span><h2>제안 타이밍</h2>
+        <div class="cal-nav">
+          <button onclick="calMove(-1)" title="이전 달">‹</button>
+          <span class="cal-label" id="calLabel">—</span>
+          <button onclick="calMove(1)" title="다음 달">›</button>
+          <button class="cal-today-btn" onclick="calToday()" title="이번 달로">오늘</button>
+        </div>
+      </div>
+      <div class="cal-wrap">
+        <div class="cal-dow"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="cal-detail" id="calDetail"></div>
+    </div>
+
+    <div class="panel key-panel">
+      <div class="panel-head">
+        <span>⭐</span><h2>주요 이슈</h2>
+        <div class="count" id="keyCount">0건</div>
+      </div>
+      <div class="key-filter">
+        <button class="k-btn active" onclick="setKeyRange(7,this)">최근 7일</button>
+        <button class="k-btn" onclick="setKeyRange(30,this)">30일</button>
+        <button class="k-btn" onclick="setKeyRange(0,this)">전체</button>
+      </div>
+      <div class="key-list" id="keyList"></div>
+    </div>
+  </div>
+
   <div class="panel">
     <div class="panel-head"><span>🏢</span><h2>모니터링 기업</h2></div>
     <div class="search-wrap">
@@ -1451,7 +1545,305 @@ function updateStats() {
   const dates = FINDINGS.map(f => f.date).filter(Boolean).sort();
   document.getElementById('lastScan').textContent = dates.length ? dates[dates.length - 1] : '아직 없음';
 }
-updateStats(); renderFeed(); renderCompanies();
+
+// ═══════════════════════════════════════════════════════════════
+// 제안 타이밍 캘린더 + 주요 이슈
+// (스크립트가 계산한 값이 있으면 그걸 쓰고, 없으면 여기서 직접 계산)
+// ═══════════════════════════════════════════════════════════════
+
+function addMonths(d, n) {
+  const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
+  const last = new Date(y, m + n + 1, 0).getDate();
+  return new Date(y, m + n, Math.min(day, last));
+}
+function ymd(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function parseYmd(s) {
+  if (!s) return null;
+  const p = String(s).split('-').map(Number);
+  if (p.length !== 3 || p.some(isNaN)) return null;
+  return new Date(p[0], p[1]-1, p[2]);
+}
+
+// 파이썬 로직과 동일한 규칙 (스크립트 실행 전에도 작동하도록)
+function computeTiming(f) {
+  if (f.actionDate) return { action: f.actionDate, next: f.nextCycle || null, label: f.timingLabel || '추적 대상' };
+  const d = parseYmd(f.date);
+  if (!d) return { action: null, next: null, label: '' };
+  const text = (f.title || '') + ' ' + (f.summary || '');
+  const annual = ['연간','년도','2026','2027','차년도'].some(w => text.includes(w));
+  const partnership = ['협약','파트너십','위탁','MOU','업무협약'].some(w => text.includes(w));
+  if (f.status === 'open' && (f.type === 'recruit' || f.type === 'tender'))
+    return { action: ymd(d), next: null, label: '즉시 검토 — 모집 진행 중' };
+  if (f.type === 'recruit' && annual)
+    return { action: ymd(addMonths(d,8)), next: ymd(addMonths(d,11)), label: '제안서 선제 발송' };
+  if (f.type === 'recruit')
+    return { action: ymd(addMonths(d,6)), next: ymd(addMonths(d,9)), label: '다음 공모 대비 준비' };
+  if (f.type === 'tender')
+    return { action: ymd(addMonths(d,9)), next: ymd(addMonths(d,12)), label: '차기 입찰 준비' };
+  if (partnership)
+    return { action: ymd(addMonths(d,9)), next: ymd(addMonths(d,12)), label: '재계약 전 대안 제안' };
+  return { action: ymd(addMonths(d,4)), next: null, label: '사업 기획 시점 컨텍' };
+}
+
+const STRONG = [
+  [['운영기관','수행기관','위탁운영','위탁 운영','협력기관','참여기관'], 45, '운영·수행기관 모집'],
+  [['입찰','나라장터','용역 공고','낙찰'], 45, '입찰 공고'],
+  [['공모','공개모집','공개 모집'], 30, '공모 진행'],
+  [['위탁','민간위탁'], 30, '위탁 사업'],
+  [['협약','업무협약','MOU','파트너십'], 27, '협약 체결 — 재계약 시점 추적'],
+  [['선정','선정돼','선정됐'], 27, '수행기관 선정 — 계약 주기 파악'],
+  [['사업 개편','신규 사업','사업 확대','확대 운영','신설'], 25, '사업 방향 변화'],
+];
+const WEAK = [
+  [['기탁','전달식','성료','수여식','개최','발대식'], -18],
+  [['봉사','캠페인','체험행사'], -12],
+];
+const KEY_THRESHOLD = 45;
+
+function scoreItem(f) {
+  if (typeof f.keyScore === 'number') return { score: f.keyScore, reason: f.keyReason || '', isKey: !!f.isKey };
+  const text = (f.title || '') + ' ' + (f.summary || '');
+  let score = f.type === 'tender' ? 25 : f.type === 'recruit' ? 20 : 3;
+  if (f.status === 'open') score += 15;
+  let reason = '';
+  for (const [ws, pts, label] of STRONG) {
+    if (ws.some(w => text.includes(w))) { score += pts; reason = label; break; }
+  }
+  for (const [ws, pts] of WEAK) {
+    if (ws.some(w => text.includes(w))) { score += pts; break; }
+  }
+  if (!reason) reason = f.type !== 'news' ? '모집·공고 관련' : '동향 참고';
+  score = Math.max(score, 0);
+  return { score, reason, isKey: score >= KEY_THRESHOLD };
+}
+
+// 피드 + 아카이브 전체를 하나로 (캘린더·주요이슈 재료)
+function allItems() {
+  const arch = [];
+  (typeof ARCHIVE !== 'undefined' ? ARCHIVE : []).forEach(w => (w.items || []).forEach(i => arch.push(i)));
+  const seen = new Set();
+  return [...FINDINGS, ...arch].filter(f => {
+    const k = f.id || (f.company + f.title);
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+
+function daysUntil(dateStr) {
+  const d = parseYmd(dateStr); if (!d) return null;
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((d - t) / 86400000);
+}
+
+// 같은 기사가 여러 기업에 중복 매칭되는 경우 하나로 합친다.
+// 캘린더·주요이슈에는 '주요 이슈'로 판정된 것만 올린다 (일반 뉴스는 타이밍 의미가 낮아 제외).
+function mergedKeyItems() {
+  const map = new Map();
+  allItems().forEach(f => {
+    const s = scoreItem(f);
+    if (!s.isKey) return;
+    const t = computeTiming(f);
+    const k = (f.title || '') + '|' + (t.action || '');
+    if (map.has(k)) {
+      const e = map.get(k);
+      if (f.company && !e.companies.includes(f.company)) e.companies.push(f.company);
+      if (s.score > e._s.score) e._s = s;
+    } else {
+      map.set(k, { ...f, companies: f.company ? [f.company] : [], _s: s, _t: t });
+    }
+  });
+  return [...map.values()];
+}
+
+function coLabel(x) {
+  const n = x.companies.length;
+  if (!n) return x.company || '—';
+  return n > 1 ? `${x.companies[0]} 외 ${n - 1}곳` : x.companies[0];
+}
+
+// 현재 모집이 진행 중인 건은 '지남'이 아니라 '지금 해야 할 일'이다.
+function isLive(x) {
+  return x.status === 'open' && (x._t.label || '').includes('즉시');
+}
+// 정렬·D-day 계산용 (진행 중이면 0으로 최우선)
+function urgencyDays(x) {
+  if (isLive(x)) return 0;
+  const d = daysUntil(x._t.action);
+  return (d === null || d < 0) ? 9999 : d;
+}
+// 캘린더에 찍을 날짜 (진행 중이면 오늘로 끌어올림)
+function calDate(x) {
+  return isLive(x) ? ymd(new Date()) : x._t.action;
+}
+
+// ── 캘린더 ──────────────────────────────────────────────────
+let calCursor = new Date();
+let calSelected = null;
+
+function buildEventMap() {
+  const map = {};
+  mergedKeyItems().forEach(x => {
+    const k = calDate(x);
+    if (!k) return;
+    (map[k] = map[k] || []).push(x);
+  });
+  return map;
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calGrid');
+  if (!grid) return;
+  const map = buildEventMap();
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  document.getElementById('calLabel').textContent = `${y}년 ${m+1}월`;
+
+  const first = new Date(y, m, 1);
+  const start = new Date(y, m, 1 - first.getDay());
+  const todayStr = ymd(new Date());
+
+  let html = '';
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const key = ymd(d);
+    const evs = map[key] || [];
+    const other = d.getMonth() !== m;
+    const dd = daysUntil(key);
+    const urgent = evs.length && dd !== null && dd >= 0 && dd <= 7;
+    const cls = ['cal-cell'];
+    if (other) cls.push('other');
+    if (key === todayStr) cls.push('today');
+    if (evs.length) cls.push('has');
+    if (urgent) cls.push('urgent');
+    if (key === calSelected) cls.push('selected');
+
+    let inner = `<div class="cal-daynum">${d.getDate()}</div>`;
+    if (evs.length) {
+      const nm = coLabel(evs[0]);
+      inner += `<div class="cal-chip ${urgent ? 'urgent' : ''}" title="${nm}">${nm}</div>`;
+      if (evs.length > 1) inner += `<div class="cal-more">+${evs.length - 1}건</div>`;
+    }
+    html += `<div class="${cls.join(' ')}" ${evs.length ? `onclick="calSelect('${key}')"` : ''}>${inner}</div>`;
+  }
+  grid.innerHTML = html;
+  renderCalDetail(map);
+}
+
+function renderCalDetail(map) {
+  const box = document.getElementById('calDetail');
+  if (!box) return;
+  map = map || buildEventMap();
+
+  if (!calSelected || !map[calSelected]) {
+    // 선택 없으면 다가오는 일정 요약
+    const upcoming = Object.keys(map)
+      .map(k => ({ k, d: daysUntil(k) }))
+      .filter(x => x.d !== null && x.d >= 0)
+      .sort((a,b) => a.d - b.d).slice(0, 3);
+    if (!upcoming.length) {
+      box.innerHTML = '<div class="cal-detail-empty">표시할 일정이 없습니다.<br>날짜를 누르면 상세가 나옵니다.</div>';
+      return;
+    }
+    box.innerHTML = '<div class="cal-detail-head">⏰ 다가오는 일정</div>' +
+      upcoming.map(u => {
+        const x = map[u.k][0];
+        const extra = map[u.k].length > 1 ? ` 외 ${map[u.k].length-1}건` : '';
+        return `<div class="cal-ev">
+          <div class="cal-ev-co">${coLabel(x)}${extra}</div>
+          <div class="cal-ev-label">${x._t.label}</div>
+          <div class="cal-ev-meta">${u.k} · ${u.d === 0 ? '오늘' : 'D-' + u.d}</div>
+        </div>`;
+      }).join('');
+    return;
+  }
+
+  const evs = map[calSelected];
+  box.innerHTML = `<div class="cal-detail-head">📌 ${calSelected} · ${evs.length}건</div>` +
+    evs.map(x => `<div class="cal-ev">
+      <div class="cal-ev-co">${coLabel(x)}</div>
+      <div class="cal-ev-label">${x._t.label}</div>
+      <div class="cal-ev-title">${x.title}</div>
+      <div class="cal-ev-meta">
+        근거 뉴스 ${x.date}${x._t.next ? ` · 다음 주기 예상 ${x._t.next}` : ''}
+        ${x.url ? ` · <a href="${x.url}" target="_blank">원문</a>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function calMove(n) { calCursor = addMonths(calCursor, n); calSelected = null; renderCalendar(); }
+function calToday() { calCursor = new Date(); calSelected = null; renderCalendar(); }
+function calSelect(key) { calSelected = (calSelected === key ? null : key); renderCalendar(); }
+
+// ── 주요 이슈 ────────────────────────────────────────────────
+let keyRange = 7;
+function setKeyRange(n, el) {
+  keyRange = n;
+  document.querySelectorAll('.k-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderKeyIssues();
+}
+
+function renderKeyIssues() {
+  const box = document.getElementById('keyList');
+  if (!box) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  let list = mergedKeyItems();
+
+  if (keyRange > 0) {
+    list = list.filter(x => {
+      const d = parseYmd(x.date);
+      return d && (today - d) / 86400000 <= keyRange;
+    });
+  }
+
+  // 진행 중 → 임박한 실행일 → 점수순
+  list.sort((a, b) => {
+    const va = urgencyDays(a), vb = urgencyDays(b);
+    if (va !== vb) return va - vb;
+    return b._s.score - a._s.score;
+  });
+
+  document.getElementById('keyCount').textContent = list.length + '건';
+
+  if (!list.length) {
+    box.innerHTML = `<div class="key-empty">해당 기간에 주요 이슈가 없습니다.<br>기간을 넓혀보세요.</div>`;
+    return;
+  }
+
+  box.innerHTML = list.map(x => {
+    let ddHtml = '';
+    if (isLive(x)) {
+      ddHtml = `<span class="key-dday">🔥 진행 중</span>`;
+    } else {
+      const dd = daysUntil(x._t.action);
+      if (dd !== null) {
+        if (dd < 0) ddHtml = `<span class="key-dday later">지남</span>`;
+        else if (dd === 0) ddHtml = `<span class="key-dday">오늘</span>`;
+        else if (dd <= 7) ddHtml = `<span class="key-dday">D-${dd}</span>`;
+        else if (dd <= 30) ddHtml = `<span class="key-dday soon">D-${dd}</span>`;
+        else ddHtml = `<span class="key-dday later">D-${dd}</span>`;
+      }
+    }
+    const coTitle = x.companies.join(', ');
+    return `<div class="key-item">
+      <div class="key-top">
+        <span class="key-reason">${x._s.reason}</span>
+        ${ddHtml}
+        <span class="key-co" title="${coTitle}">${coLabel(x)}</span>
+      </div>
+      <div class="key-title">${x.title}</div>
+      <div class="key-note">${x._t.label}${x._t.action ? ` · ${x._t.action}` : ''}${x._t.next ? ` (다음 주기 ${x._t.next})` : ''}</div>
+      <div class="key-meta">
+        <span>수집 ${x.date}</span>
+        ${x.url ? `<a href="${x.url}" target="_blank">🔗 원문</a>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+updateStats(); renderFeed(); renderCompanies(); renderCalendar(); renderKeyIssues();
 </script>
 </body>
 </html>
