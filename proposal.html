@@ -213,6 +213,32 @@
   .td-pass      { background: #ef4444; }
   .track-export-btn { font-size: 10px; padding: 3px 8px; border: 1px solid #e5e8f0; border-radius: 5px; background: #fff; color: #6b7280; cursor: pointer; margin-left: auto; }
   .track-export-btn:hover { background: #f0f4ff; color: #3b82f6; }
+
+  /* ── 3차 선별 (KMA 진입 가능성) ── */
+  .filter-divider { width: 100%; height: 1px; background: #eef0f6; margin: 3px 0 1px; }
+  .f-btn.f3-pass.active  { background: #16a34a; border-color: #16a34a; }
+  .f-btn.f3-check.active { background: #d97706; border-color: #d97706; }
+  .f-btn.f3-out.active   { background: #94a3b8; border-color: #94a3b8; }
+
+  .s3-box { margin-top: 11px; border-radius: 8px; padding: 10px 12px; border: 1px solid; }
+  .s3-box.s3-pass  { background: #f0fdf4; border-color: #bbf7d0; }
+  .s3-box.s3-check { background: #fffbeb; border-color: #fde68a; }
+  .s3-box.s3-out   { background: #f8fafc; border-color: #e2e8f0; }
+  .s3-head { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; margin-bottom: 7px; }
+  .s3-pass .s3-head  { color: #15803d; }
+  .s3-check .s3-head { color: #b45309; }
+  .s3-out .s3-head   { color: #64748b; }
+  .s3-row { font-size: 12px; line-height: 1.55; color: #374151; margin-bottom: 5px; }
+  .s3-row:last-child { margin-bottom: 0; }
+  .s3-key { font-size: 10px; font-weight: 800; color: #6b7280; letter-spacing: .3px; display: block; margin-bottom: 1px; }
+  .s3-route { background: #fff; border: 1px solid #e5e8f0; border-radius: 6px; padding: 6px 9px; font-weight: 600; color: #1a1a2e; }
+  .s3-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 800; }
+  .chip-s3-pass  { background: #dcfce7; color: #166534; }
+  .chip-s3-check { background: #fef3c7; color: #92400e; }
+  .chip-s3-out   { background: #f1f5f9; color: #64748b; }
+  .s3-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-left: 2px; }
+  .d3-pass { background: #16a34a; } .d3-check { background: #f59e0b; } .d3-out { background: #cbd5e1; }
+  .s3-warn { margin-top: 8px; font-size: 11px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 7px 9px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -246,6 +272,10 @@
       <button class="f-btn" onclick="setFilter('rec',this)">✅ 제안추천</button>
       <button class="f-btn" onclick="setFilter('nograde',this)">📋 미분류</button>
       <button class="f-btn" onclick="setFilter('tracked',this)">📌 추적 중</button>
+      <span class="filter-divider" title="3차 선별 — KMA 진입 가능성"></span>
+      <button class="f-btn f3-pass" onclick="setFilter('s3pass',this)">🎯 3차 선별</button>
+      <button class="f-btn f3-check" onclick="setFilter('s3check',this)">❓ 확인 불가</button>
+      <button class="f-btn f3-out" onclick="setFilter('s3out',this)">🚫 3차 제외</button>
       <button class="track-export-btn" onclick="exportTracking()" title="추적 현황 CSV 내보내기">📊 내보내기</button>
     </div>
     <div class="company-list" id="companyList"></div>
@@ -265,6 +295,10 @@
     </div>
   </div>
 </div>
+
+<!-- 3차 선별 데이터 (별도 파일). 없으면 빈 객체로 시작해 페이지는 정상 작동한다. -->
+<script>window.STAGE3 = {};</script>
+<script src="stage3.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════
@@ -16119,6 +16153,37 @@ let results = { strategy: '', phone: '', email: '' };
 let activeTab = 'strategy';
 let isLoading = false;
 
+// ═══════════════════════════════════════════════════════
+// 3차 선별 (KMA 진입 가능성) — stage3.js 에서 주입
+//   STAGE3 = { "기업명": { v:"3차 선별|확인 불가|제외",
+//                          s:"확인된 수행구조", p:"KMA 예상 진입경로" }, ... }
+//   파일이 없어도 페이지는 정상 작동한다.
+// ═══════════════════════════════════════════════════════
+const S3_LABEL = {
+  '3차 선별': { icon:'🎯', text:'3차 선별 — 진입경로 확인됨', cls:'s3-pass' },
+  '확인 불가': { icon:'❓', text:'확인 불가 — 통화로 검증 필요',  cls:'s3-check' },
+  '제외':     { icon:'🚫', text:'3차 제외 — 진입 여지 낮음',     cls:'s3-out' },
+};
+
+let _s3idx = null;
+function s3norm(n) {
+  return String(n || '').split('/')[0].replace(/\(.*?\)/g,'')
+    .replace(/\s|㈜|주식회사/g,'').toLowerCase();
+}
+function s3(name) {
+  const src = (typeof STAGE3 !== 'undefined' && STAGE3) ? STAGE3 : (window.STAGE3 || {});
+  if (!_s3idx) {
+    _s3idx = {};
+    for (const k in src) _s3idx[s3norm(k)] = src[k];
+  }
+  return _s3idx[s3norm(name)] || {};
+}
+function s3Verdict(name) { return s3(name).v || ''; }
+function hasStage3() {
+  const src = (typeof STAGE3 !== 'undefined' && STAGE3) ? STAGE3 : (window.STAGE3 || {});
+  return Object.keys(src).length > 0;
+}
+
 // ─── 컨텍/제안 상태 트래킹 ───
 const STATUS_LABELS = {
   contacted: '📞 컨텍함',
@@ -16295,6 +16360,9 @@ function renderList() {
     if (currentFilter === 'rec') return c.recommendation === 'Y-우선' || c.recommendation === 'Y-조건부';
     if (currentFilter === 'nograde') return !c.priority && !c.recommendation;
     if (currentFilter === 'tracked') return !!getTracking(c.name);
+    if (currentFilter === 's3pass')  return s3Verdict(c.name) === '3차 선별';
+    if (currentFilter === 's3check') return s3Verdict(c.name) === '확인 불가';
+    if (currentFilter === 's3out')   return s3Verdict(c.name) === '제외';
     return true;
   });
 
@@ -16308,9 +16376,11 @@ function renderList() {
     const recMark = c.recommendation === 'Y-우선' ? ' ✅' : c.recommendation === 'Y-조건부' ? ' 🔶' : '';
     const track = getTracking(c.name);
     const trackDot = track ? `<div class="track-dot td-${track.status}" title="${STATUS_LABELS[track.status] || ''} ${track.date || ''}"></div>` : '';
+    const v3 = s3Verdict(c.name);
+    const s3Dot = v3 ? `<div class="s3-dot ${v3==='3차 선별'?'d3-pass':v3==='확인 불가'?'d3-check':'d3-out'}" title="3차 선별: ${v3}"></div>` : '';
     return `<div class="company-row ${isSelected ? 'selected' : ''}" onclick="selectCompany('${safeName}')">
       <div class="priority-dot ${dotClass}"></div>
-      ${trackDot}
+      ${trackDot}${s3Dot}
       <span class="company-name-text">${c.name}${recMark}</span>
       <span class="sector-badge">${sectorText}</span>
     </div>`;
@@ -16703,6 +16773,32 @@ function renderArea() {
       ? renderCsrCard()
       : renderCckCard();
 
+  // ── 3차 선별 (KMA 진입 가능성) ──
+  const s3d = s3(c.name);
+  const s3Html = s3d.v ? (() => {
+    const L = S3_LABEL[s3d.v] || { icon:'•', text:s3d.v, cls:'s3-out' };
+    return `
+    <div class="s3-box ${L.cls}">
+      <div class="s3-head"><span>${L.icon}</span><span>3차 선별 · ${L.text}</span></div>
+      ${s3d.s ? `<div class="s3-row"><span class="s3-key">확인된 수행구조</span>${s3d.s}</div>` : ''}
+      ${s3d.p ? `<div class="s3-row"><span class="s3-key">KMA 예상 진입경로</span>
+                   <div class="s3-route">${s3d.p}</div></div>` : ''}
+      ${s3d.v === '확인 불가' ? `<div class="s3-warn">
+          공개자료만으로는 외부 위탁 구조를 확인하지 못했습니다.
+          제안서를 보내기 전에 <b>교육사업을 외부 전문기관과 함께 운영하는지</b>,
+          <b>운영사 변경·신규 기획 계획이 있는지</b>를 통화로 먼저 확인하세요.
+        </div>` : ''}
+      ${s3d.v === '제외' ? `<div class="s3-warn">
+          구조적으로 KMA가 들어갈 여지가 낮다고 판단된 곳입니다.
+          신규 사업이나 구조 변화가 확인되기 전까지는 자원 투입을 최소화하세요.
+        </div>` : ''}
+    </div>`;
+  })() : (hasStage3() ? `
+    <div class="s3-box s3-out">
+      <div class="s3-head"><span>•</span><span>3차 선별 — 판정 없음</span></div>
+      <div class="s3-row" style="color:#94a3b8">이 기관은 3차 선별 대상에 포함되지 않았습니다.</div>
+    </div>` : '');
+
   const newsHtml = `
     <div class="news-section">
       <div class="news-section-label">📰 최근 모니터링 소식</div>
@@ -16786,6 +16882,7 @@ function renderArea() {
       ${syncHtml}
       ${apiHtml}
       ${generateBtnHtml}
+      ${s3Html}
       ${cardHtml}
       ${newsHtml}
     `;
@@ -16794,6 +16891,7 @@ function renderArea() {
     // 결과 없을 때: 기존 순서
     area.innerHTML = `
       ${statusBarHtml}
+      ${s3Html}
       ${cardHtml}
       ${newsHtml}
       ${syncHtml}
@@ -16884,11 +16982,62 @@ async function generate() {
   renderArea(); // 결과가 최상단에 렌더링됨, 스크롤 불필요
 }
 
+// ── 3차 판정에 따라 결과물의 목적 자체를 바꾼다 ──
+function stage3Directive(v, d) {
+  if (v === '3차 선별') {
+    return `
+## ⭐ 3차 선별 통과 — 진입경로가 확인된 기업입니다
+이 기업은 교육형 CSR을 **외부 주체와 함께 운영한 선례가 확인**됐습니다.
+- 확인된 수행구조: ${d.s || '기재 없음'}
+- 확인된 진입경로: ${d.p || '기재 없음'}
+
+**따라서 KMA를 처음부터 설명하는 방식으로 쓰지 마세요.**
+이미 외부 협력을 하는 곳이므로, "저희가 이런 일을 합니다"가 아니라
+**"지금 하고 계신 그 사업의 다음 단계"를 제안**하는 방식으로 작성하세요.
+- 위 진입경로에 적힌 대상(기업 CSR팀 / 재단 / 기존 협력기관)을 **실제 수신자로 지정**하세요.
+- 기존 수행사가 명시돼 있다면 그 사업의 확장·고도화·다지역화 지점을 짚으세요.
+- 전화 스크립트의 '연락 경위'에도 이 사업명을 그대로 인용하세요.`;
+  }
+  if (v === '확인 불가') {
+    return `
+## ❓ 확인 불가 — 아직 제안 단계가 아닙니다
+공개자료만으로는 이 기업이 교육사업을 외부에 위탁하는지 **확인하지 못했습니다.**
+- 조사 메모: ${d.s || '기재 없음'}
+- 추정 접근 경로: ${d.p || '기재 없음'}
+
+**이 상태에서 완성된 제안서를 보내면 근거 없는 이야기가 됩니다.**
+결과물의 목적을 '제안'이 아니라 **'구조 확인'**으로 바꿔 작성하세요.
+- [맞춤 제안 전략]은 제안서가 아니라 **무엇을 확인해야 하는지에 대한 판단 메모**로 쓰세요.
+- [전화 스크립트]의 핵심은 설득이 아니라 **질문**입니다. 반드시 아래 세 가지를 묻는 문장을 넣으세요.
+  ① 교육사업을 외부 전문기관과 함께 운영하시는지
+  ② 현재 운영을 맡고 있는 곳이 있는지, 계약 주기는 어떻게 되는지
+  ③ 신규 사업 기획이나 운영사 변경 계획이 있는지
+- [이메일 초안]은 제안서가 아니라 **짧은 문의 메일**로 쓰세요. 자료 요청과 통화 요청 중심으로,
+  구체적 사업 제안은 넣지 마세요.`;
+  }
+  if (v === '제외') {
+    return `
+## 🚫 3차 제외 — 구조적으로 진입 여지가 낮다고 판정된 기업
+- 판정 근거: ${d.s || '기재 없음'}
+
+현재 우선순위에서 제외된 곳입니다. 억지로 제안을 만들지 마세요.
+[맞춤 제안 전략] 첫 줄에 **왜 지금은 우선순위가 아닌지**를 먼저 쓰고,
+**어떤 변화가 생기면 재검토할 가치가 있는지**(신규 교육사업 신설, 재단 설립,
+운영기관 공모 개시 등)를 조건으로 제시하세요.
+전화·이메일은 지금 발송용이 아니라 **그 변화가 확인됐을 때 쓸 초안**임을 명시하세요.`;
+  }
+  return `
+## 3차 선별 정보 없음
+이 기관은 3차 선별(진입 가능성) 조사 대상에 포함되지 않았습니다.
+외부 위탁 여부가 확인되지 않았으므로, 단정적인 제안보다 **확인 질문을 함께 배치**하세요.`;
+}
+
 function buildPrompt(c, news) {
   const donation = c.avgDonation ? (c.avgDonation / 100).toFixed(1) + '억원' : '미확인';
   const eduScale = c.eduCount
     ? c.eduCount + '개' + (c.eduRatioPct ? ' (전체 공개사업의 ' + c.eduRatioPct + '%)' : '')
     : (c.eduRatioText || '미확인');
+  const _s3 = s3(c.name);
 
   return `당신은 KMA 한국능률협회 평생교육본부 임팩트 비즈니스팀의 제안 전략 어시스턴트입니다.
 실제로 전화를 걸고 메일을 보낼 담당자가 그대로 쓸 수 있는, 현장에서 통하는 결과물을 만드는 것이 목표입니다.
@@ -16919,6 +17068,12 @@ function buildPrompt(c, news) {
 - KMA 진입 포인트(사전 분석): ${(c.kmaPoints || []).join(' / ') || '미확인'}
 - 연락처 정보: ${c.contact || '미확인'}
 - 홈페이지: ${c.homepage || '미확인'}
+${_s3.v ? `
+### 3차 선별 결과 (KMA 진입 가능성 실사)
+- 판정: ${_s3.v}
+- 확인된 수행구조: ${_s3.s || '기재 없음'}
+- KMA 예상 진입경로: ${_s3.p || '기재 없음'}` : ''}
+${stage3Directive(_s3.v, _s3)}
 ${news.length > 0 ? `
 ## 최근 동향 (모니터링 수집)
 ${news.map(n => `- [${n.date}] ${n.title} (${n.type === 'recruit' ? '모집 공고 — ' + n.trackWhen : '뉴스'})`).join('\n')}` : ''}
