@@ -23,7 +23,7 @@
   .nav-tab.active { background: #3b82f6; color: #fff; }
 
   /* Layout */
-  .layout { display: grid; grid-template-columns: 260px 1fr; gap: 12px; padding: 12px 24px; flex: 1; min-height: 0; }
+  .layout { display: grid; grid-template-columns: 450px 1fr; gap: 12px; padding: 12px 24px; flex: 1; min-height: 0; }
 
   /* Panels */
   .panel { background: #fff; border-radius: 10px; border: 1px solid #e5e8f0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -47,8 +47,8 @@
   .p-none { background: #d1d5db; }
   .p-B { background: #3b82f6; }
   .p-C { background: #94a3b8; }
-  .company-name-text { font-size: 12px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sector-badge { font-size: 10px; background: #f0f4ff; color: #4f46e5; padding: 1px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+  .company-name-text { font-size: 12.5px; font-weight: 500; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sector-badge { font-size: 10px; background: #f0f4ff; color: #4f46e5; padding: 1px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 1; max-width: 42%; overflow: hidden; text-overflow: ellipsis; }
 
   /* Right panel */
   .proposal-area { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
@@ -220,6 +220,22 @@
   .f-btn.f3-check.active { background: #d97706; border-color: #d97706; }
   .f-btn.f3-out.active   { background: #94a3b8; border-color: #94a3b8; }
 
+  /* 진행 상태 필터 */
+  .f-btn.fs-contacted.active { background: #0ea5e9; border-color: #0ea5e9; }
+  .f-btn.fs-proposed.active  { background: #6366f1; border-color: #6366f1; }
+  .f-btn.fs-ongoing.active   { background: #f59e0b; border-color: #f59e0b; }
+  .f-btn.fs-done.active      { background: #16a34a; border-color: #16a34a; }
+  .f-btn.fs-pass.active      { background: #ef4444; border-color: #ef4444; }
+  .f-btn.fs-none.active      { background: #94a3b8; border-color: #94a3b8; }
+
+  /* 목록 항목의 진행 상태 뱃지 */
+  .row-status { font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+  .rs-contacted { background: #e0f2fe; color: #0369a1; }
+  .rs-proposed  { background: #e0e7ff; color: #4338ca; }
+  .rs-ongoing   { background: #fef3c7; color: #b45309; }
+  .rs-done      { background: #dcfce7; color: #166534; }
+  .rs-pass      { background: #fee2e2; color: #991b1b; }
+
   .s3-box { margin-top: 11px; border-radius: 8px; padding: 10px 12px; border: 1px solid; }
   .s3-box.s3-pass  { background: #f0fdf4; border-color: #bbf7d0; }
   .s3-box.s3-check { background: #fffbeb; border-color: #fde68a; }
@@ -276,6 +292,13 @@
       <button class="f-btn f3-pass" onclick="setFilter('s3pass',this)">🎯 3차 선별</button>
       <button class="f-btn f3-check" onclick="setFilter('s3check',this)">❓ 확인 불가</button>
       <button class="f-btn f3-out" onclick="setFilter('s3out',this)">🚫 3차 제외</button>
+      <span class="filter-divider" title="진행 상태"></span>
+      <button class="f-btn fs-contacted" onclick="setFilter('st_contacted',this)">📞 컨텍함 <b id="cnt_contacted">0</b></button>
+      <button class="f-btn fs-proposed" onclick="setFilter('st_proposed',this)">✉️ 제안 발송 <b id="cnt_proposed">0</b></button>
+      <button class="f-btn fs-ongoing" onclick="setFilter('st_ongoing',this)">🔄 협의 중 <b id="cnt_ongoing">0</b></button>
+      <button class="f-btn fs-done" onclick="setFilter('st_done',this)">✅ 완료 <b id="cnt_done">0</b></button>
+      <button class="f-btn fs-pass" onclick="setFilter('st_pass',this)">⛔ 패스 <b id="cnt_pass">0</b></button>
+      <button class="f-btn fs-none" onclick="setFilter('st_none',this)">⚪ 미컨텍 <b id="cnt_none">0</b></button>
       <button class="track-export-btn" onclick="exportTracking()" title="추적 현황 CSV 내보내기">📊 내보내기</button>
     </div>
     <div class="company-list" id="companyList"></div>
@@ -16228,10 +16251,19 @@ async function pullFromSheet(showResult) {
     const res = await fetch(url);
     const j = await res.json();
     if (!j.ok) throw new Error(j.error || '응답 오류');
-    localStorage.setItem('proposal_tracking', JSON.stringify(j.data || {}));
+
+    // 덮어쓰지 않고 병합한다.
+    // 시트가 비어 있거나 일부만 있을 때 이 브라우저의 기록이 지워지는 것을 막는다.
+    const local = getAllTracking();
+    const remote = j.data || {};
+    const merged = Object.assign({}, local, remote);
+    localStorage.setItem('proposal_tracking', JSON.stringify(merged));
+
     syncState = 'ok';
-    const cnt = Object.keys(j.data || {}).length;
-    syncMessage = `✓ 시트와 동기화됨 (${cnt}건)`;
+    const rc = Object.keys(remote).length;
+    const lc = Object.keys(local).length;
+    const only = Object.keys(local).filter(k => !(k in remote)).length;
+    syncMessage = `✓ 시트 ${rc}건 · 이 브라우저 ${lc}건${only ? ` (미업로드 ${only}건 — ⬆ 전체 올리기 권장)` : ''}`;
     renderList();
     renderArea();
   } catch (err) {
@@ -16346,6 +16378,23 @@ function setFilter(f, btn) {
   renderList();
 }
 
+// 진행 상태별 건수를 필터 버튼에 표시 (데이터가 실제로 있는지 바로 보인다)
+function updateStatusCounts() {
+  const all = getAllTracking();
+  const c = { contacted:0, proposed:0, ongoing:0, done:0, pass:0 };
+  let tracked = 0;
+  COMPANY_DATA.forEach(co => {
+    const t = all[co.name];
+    if (t && t.status) { if (c[t.status] !== undefined) c[t.status]++; tracked++; }
+  });
+  for (const k in c) {
+    const el = document.getElementById('cnt_' + k);
+    if (el) el.textContent = c[k];
+  }
+  const none = document.getElementById('cnt_none');
+  if (none) none.textContent = COMPANY_DATA.length - tracked;
+}
+
 function renderList() {
   const q = document.getElementById('searchInput').value.toLowerCase();
   const list = document.getElementById('companyList');
@@ -16363,10 +16412,16 @@ function renderList() {
     if (currentFilter === 's3pass')  return s3Verdict(c.name) === '3차 선별';
     if (currentFilter === 's3check') return s3Verdict(c.name) === '확인 불가';
     if (currentFilter === 's3out')   return s3Verdict(c.name) === '제외';
+    if (currentFilter.startsWith('st_')) {
+      const want = currentFilter.slice(3);
+      const t = getTracking(c.name);
+      return want === 'none' ? !t : (t && t.status === want);
+    }
     return true;
   });
 
   document.getElementById('listCount').textContent = filtered.length + '개';
+  updateStatusCounts();
 
   list.innerHTML = filtered.map(c => {
     const dotClass = c.priority ? `p-${c.priority}` : 'p-none';
@@ -16378,11 +16433,14 @@ function renderList() {
     const trackDot = track ? `<div class="track-dot td-${track.status}" title="${STATUS_LABELS[track.status] || ''} ${track.date || ''}"></div>` : '';
     const v3 = s3Verdict(c.name);
     const s3Dot = v3 ? `<div class="s3-dot ${v3==='3차 선별'?'d3-pass':v3==='확인 불가'?'d3-check':'d3-out'}" title="3차 선별: ${v3}"></div>` : '';
+    const stTxt = { contacted:'컨텍', proposed:'발송', ongoing:'협의', done:'완료', pass:'패스' };
+    const stBadge = track ? `<span class="row-status rs-${track.status}" title="${STATUS_LABELS[track.status]||''} ${track.date||''}">${stTxt[track.status]||track.status}</span>` : '';
     return `<div class="company-row ${isSelected ? 'selected' : ''}" onclick="selectCompany('${safeName}')">
       <div class="priority-dot ${dotClass}"></div>
-      ${trackDot}${s3Dot}
-      <span class="company-name-text">${c.name}${recMark}</span>
-      <span class="sector-badge">${sectorText}</span>
+      ${s3Dot}
+      <span class="company-name-text" title="${c.name}">${c.name}${recMark}</span>
+      ${stBadge}
+      <span class="sector-badge" title="${c.sector||''}">${sectorText}</span>
     </div>`;
   }).join('');
 }
