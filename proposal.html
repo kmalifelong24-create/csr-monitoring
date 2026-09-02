@@ -323,6 +323,14 @@
 <script>window.STAGE3 = {};</script>
 <script src="stage3.js"></script>
 
+<!-- CCK 시트 보강 데이터 (사회공헌 현황·근거링크·그룹사업 경고). 없어도 정상 작동. -->
+<script>window.CCK_EXTRA = {};</script>
+<script src="cck_extra.js"></script>
+
+<!-- 재조사 데이터 (웹으로 다시 확인한 최신 현황). 없어도 정상 작동. -->
+<script>window.RESEARCH = {};</script>
+<script src="research.js"></script>
+
 <script>
 // ═══════════════════════════════════════════════════════
 // 기업 데이터
@@ -16205,6 +16213,35 @@ function hasStage3() {
   return Object.keys(src).length > 0;
 }
 
+// ═══════════════════════════════════════════════════════
+// CCK 시트 보강 (cck_extra.js) — 원래 시트에 있었으나 도구가 안 가져왔던 열들
+//   CCK_EXTRA = { "기업명": {
+//     intro, fields, publicPrograms, publicCount,
+//     note,          // '사업정보 참고' 열 원문
+//     groupWarn,     // true = 공개사업 목록이 그룹 공통일 가능성
+//     homepage, report, csrhub
+//   }, ... }
+// ═══════════════════════════════════════════════════════
+let _cxidx = null;
+function cx(name) {
+  const src = window.CCK_EXTRA || {};
+  if (!_cxidx) { _cxidx = {}; for (const k in src) _cxidx[s3norm(k)] = src[k]; }
+  return _cxidx[s3norm(name)] || {};
+}
+
+// ═══════════════════════════════════════════════════════
+// 재조사 데이터 (research.js) — 웹으로 다시 확인한 최신 현황
+//   RESEARCH = { "기업명": {
+//     updated, programs[], structure, contact, kmaAngle, sources[], unknown[]
+//   }, ... }
+// ═══════════════════════════════════════════════════════
+let _rsidx = null;
+function rs(name) {
+  const src = window.RESEARCH || {};
+  if (!_rsidx) { _rsidx = {}; for (const k in src) _rsidx[s3norm(k)] = src[k]; }
+  return _rsidx[s3norm(name)] || {};
+}
+
 // ─── 컨텍/제안 상태 트래킹 ───
 const STATUS_LABELS = {
   contacted: '📞 컨텍함',
@@ -16554,6 +16591,35 @@ function renderArea() {
         </div>
       </div>
 
+      <!-- 재조사 결과 (research.js) — 있으면 가장 위에 -->
+      ${(() => { const r = rs(c.name); if (!r.updated) return '';
+        return `
+      <div class="card-section">
+        <div class="card-section-label">🔄 재조사 결과 <span style="font-weight:400;color:#6b7280">· ${r.updated} 확인</span></div>
+        ${(r.programs || []).length ? `<div class="collab-box">${(r.programs || []).map(p => '• ' + p).join('<br>')}</div>` : ''}
+        ${r.structure ? `<div style="margin-top:6px;font-size:11px;color:#374151;line-height:1.5"><b>운영 구조:</b> ${r.structure}</div>` : ''}
+        ${r.contact ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.5"><b>연락 경로:</b> ${r.contact}</div>` : ''}
+        ${r.kmaAngle ? `<div style="margin-top:6px;font-size:11px;color:#5b21b6;line-height:1.5"><b>KMA 진입 지점:</b> ${r.kmaAngle}</div>` : ''}
+        ${(r.unknown || []).length ? `<div style="margin-top:6px;padding:6px 8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.5"><b>❓ 확인 못 한 것 — 통화로 확인할 항목</b><br>${(r.unknown || []).map(u => '· ' + u).join('<br>')}</div>` : ''}
+        ${(r.sources || []).length ? `<div style="margin-top:6px;font-size:10px;color:#6b7280">출처: ${(r.sources || []).map(u => '<a href="' + u + '" target="_blank" rel="noopener" style="color:#2563eb">' + u.replace(/^https?:\/\//, '').slice(0, 38) + '</a>').join(' · ')}</div>` : ''}
+      </div>`; })()}
+
+      <!-- CCK 시트 보강 (cck_extra.js) -->
+      ${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.homepage) return '';
+        return `
+      <div class="card-section">
+        <div class="card-section-label">📋 사회공헌 사업 현황 <span style="font-weight:400;color:#6b7280">· CCK 조사</span></div>
+        ${x.groupWarn ? `<div style="margin-bottom:6px;padding:6px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#b91c1c;line-height:1.5"><b>⚠️ 그룹 공통 사업일 수 있음</b><br>${x.note || '동일한 공개 사업 목록이 여러 계열사에 공통 표시됨'}<br><b>→ 이 사업을 이 회사가 직접 운영한다고 단정하지 마세요.</b></div>` : ''}
+        ${x.fields ? `<div style="font-size:11px;color:#374151;line-height:1.6"><b>사업 분야:</b> ${x.fields}</div>` : ''}
+        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${x.publicCount ? ' (총 ' + x.publicCount + '개 중 3개)' : ''}:</b> ${x.publicPrograms}</div>` : ''}
+        ${x.intro ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;line-height:1.6">${x.intro}</div>` : ''}
+        <div style="margin-top:6px;font-size:10px">
+          ${x.homepage ? `<a href="${x.homepage}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">🔗 홈페이지</a>` : ''}
+          ${x.report ? `<a href="${x.report}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">📄 지속가능보고서</a>` : ''}
+          ${x.csrhub ? `<a href="${x.csrhub}" target="_blank" rel="noopener" style="color:#2563eb">📊 CSR Hub</a>` : ''}
+        </div>
+      </div>`; })()}
+
       <!-- 외부 협력·위탁 (KMA 진입 핵심) -->
       ${c.externalCollab ? `
       <div class="card-section">
@@ -16650,6 +16716,35 @@ function renderArea() {
         </div>` : ''}
       </div>
 
+      <!-- 재조사 결과 (research.js) -->
+      ${(() => { const r = rs(c.name); if (!r.updated) return '';
+        return `
+      <div class="card-section">
+        <div class="card-section-label">🔄 재조사 결과 <span style="font-weight:400;color:#6b7280">· ${r.updated} 확인</span></div>
+        ${(r.programs || []).length ? `<div class="collab-box">${(r.programs || []).map(p => '• ' + p).join('<br>')}</div>` : ''}
+        ${r.structure ? `<div style="margin-top:6px;font-size:11px;color:#374151;line-height:1.5"><b>운영 구조:</b> ${r.structure}</div>` : ''}
+        ${r.contact ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.5"><b>연락 경로:</b> ${r.contact}</div>` : ''}
+        ${r.kmaAngle ? `<div style="margin-top:6px;font-size:11px;color:#5b21b6;line-height:1.5"><b>KMA 진입 지점:</b> ${r.kmaAngle}</div>` : ''}
+        ${(r.unknown || []).length ? `<div style="margin-top:6px;padding:6px 8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.5"><b>❓ 확인 못 한 것 — 통화로 확인할 항목</b><br>${(r.unknown || []).map(u => '· ' + u).join('<br>')}</div>` : ''}
+        ${(r.sources || []).length ? `<div style="margin-top:6px;font-size:10px;color:#6b7280">출처: ${(r.sources || []).map(u => '<a href="' + u + '" target="_blank" rel="noopener" style="color:#2563eb">' + u.replace(/^https?:\/\//, '').slice(0, 38) + '</a>').join(' · ')}</div>` : ''}
+      </div>`; })()}
+
+      <!-- CCK 시트 보강 (cck_extra.js / cck.csv) -->
+      ${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.homepage) return '';
+        return `
+      <div class="card-section">
+        <div class="card-section-label">📋 사회공헌 사업 현황 <span style="font-weight:400;color:#6b7280">· CCK 조사</span></div>
+        ${x.groupWarn ? `<div style="margin-bottom:6px;padding:6px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#b91c1c;line-height:1.5"><b>⚠️ 그룹 공통 사업일 수 있음</b><br>${x.note || '동일한 공개 사업 목록이 여러 계열사에 공통 표시됨'}<br><b>→ 이 사업을 이 회사가 직접 운영한다고 단정하지 마세요.</b></div>` : ''}
+        ${x.fields ? `<div style="font-size:11px;color:#374151;line-height:1.6"><b>사업 분야:</b> ${x.fields}</div>` : ''}
+        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${x.publicCount ? ' (총 ' + x.publicCount + '개 중 3개)' : ''}:</b> ${x.publicPrograms}</div>` : ''}
+        ${x.intro ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;line-height:1.6">${x.intro}</div>` : ''}
+        <div style="margin-top:6px;font-size:10px">
+          ${x.homepage ? `<a href="${x.homepage}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">🔗 홈페이지</a>` : ''}
+          ${x.report ? `<a href="${x.report}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">📄 지속가능보고서</a>` : ''}
+          ${x.csrhub ? `<a href="${x.csrhub}" target="_blank" rel="noopener" style="color:#2563eb">📊 CSR Hub</a>` : ''}
+        </div>
+      </div>`; })()}
+
       <!-- KMA 연관 분야 -->
       ${c.kmaFields && c.kmaFields.length > 0 ? `
       <div class="card-section">
@@ -16729,6 +16824,35 @@ function renderArea() {
           <div class="meta-value">${c.eduRatioPct ? c.eduRatioPct + '%' : (c.eduRatioText ? '📝 아래 참조' : '—')}</div>
         </div>
       </div>
+
+      <!-- 재조사 결과 (research.js) — 있으면 가장 위에 -->
+      ${(() => { const r = rs(c.name); if (!r.updated) return '';
+        return `
+      <div class="card-section">
+        <div class="card-section-label">🔄 재조사 결과 <span style="font-weight:400;color:#6b7280">· ${r.updated} 확인</span></div>
+        ${(r.programs || []).length ? `<div class="collab-box">${(r.programs || []).map(p => '• ' + p).join('<br>')}</div>` : ''}
+        ${r.structure ? `<div style="margin-top:6px;font-size:11px;color:#374151;line-height:1.5"><b>운영 구조:</b> ${r.structure}</div>` : ''}
+        ${r.contact ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.5"><b>연락 경로:</b> ${r.contact}</div>` : ''}
+        ${r.kmaAngle ? `<div style="margin-top:6px;font-size:11px;color:#5b21b6;line-height:1.5"><b>KMA 진입 지점:</b> ${r.kmaAngle}</div>` : ''}
+        ${(r.unknown || []).length ? `<div style="margin-top:6px;padding:6px 8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.5"><b>❓ 확인 못 한 것 — 통화로 확인할 항목</b><br>${(r.unknown || []).map(u => '· ' + u).join('<br>')}</div>` : ''}
+        ${(r.sources || []).length ? `<div style="margin-top:6px;font-size:10px;color:#6b7280">출처: ${(r.sources || []).map(u => '<a href="' + u + '" target="_blank" rel="noopener" style="color:#2563eb">' + u.replace(/^https?:\/\//, '').slice(0, 38) + '</a>').join(' · ')}</div>` : ''}
+      </div>`; })()}
+
+      <!-- CCK 시트 보강 (cck_extra.js) -->
+      ${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.homepage) return '';
+        return `
+      <div class="card-section">
+        <div class="card-section-label">📋 사회공헌 사업 현황 <span style="font-weight:400;color:#6b7280">· CCK 조사</span></div>
+        ${x.groupWarn ? `<div style="margin-bottom:6px;padding:6px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#b91c1c;line-height:1.5"><b>⚠️ 그룹 공통 사업일 수 있음</b><br>${x.note || '동일한 공개 사업 목록이 여러 계열사에 공통 표시됨'}<br><b>→ 이 사업을 이 회사가 직접 운영한다고 단정하지 마세요.</b></div>` : ''}
+        ${x.fields ? `<div style="font-size:11px;color:#374151;line-height:1.6"><b>사업 분야:</b> ${x.fields}</div>` : ''}
+        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${x.publicCount ? ' (총 ' + x.publicCount + '개 중 3개)' : ''}:</b> ${x.publicPrograms}</div>` : ''}
+        ${x.intro ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;line-height:1.6">${x.intro}</div>` : ''}
+        <div style="margin-top:6px;font-size:10px">
+          ${x.homepage ? `<a href="${x.homepage}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">🔗 홈페이지</a>` : ''}
+          ${x.report ? `<a href="${x.report}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">📄 지속가능보고서</a>` : ''}
+          ${x.csrhub ? `<a href="${x.csrhub}" target="_blank" rel="noopener" style="color:#2563eb">📊 CSR Hub</a>` : ''}
+        </div>
+      </div>`; })()}
 
       <!-- 외부 협력·위탁 (KMA 진입 핵심) -->
       ${c.externalCollab ? `
@@ -17131,7 +17255,32 @@ function buildPrompt(c, news) {
 - KMA 연관 분야: ${(c.kmaFields || []).join(' / ') || '미확인'}
 - KMA 진입 포인트(사전 분석): ${(c.kmaPoints || []).join(' / ') || '미확인'}
 - 연락처 정보: ${c.contact || '미확인'}
-- 홈페이지: ${c.homepage || '미확인'}
+- 홈페이지: ${c.homepage || cx(c.name).homepage || '미확인'}
+${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.intro) return '';
+  return `
+### CCK 조사 자료 (사회공헌 사업 현황)
+- 회사 개요: ${x.intro || '기재 없음'}
+- 사업 분야: ${x.fields || '기재 없음'}
+- 공개 사업${x.publicCount ? ` (총 ${x.publicCount}개 중 3개)` : ''}: ${x.publicPrograms || '기재 없음'}
+${x.groupWarn ? `
+⚠️ **경고 — 위 '공개 사업' 목록을 이 회사의 사업으로 단정하지 마세요.**
+조사 기록: "${x.note || '동일한 공개 사업 목록이 여러 계열사에 공통 표시됨'}"
+이 목록은 그룹 전체 또는 계열사 공통으로 집계된 것일 수 있습니다.
+- 사업명을 "귀사가 운영하시는 OOO"처럼 확정해서 쓰지 마세요.
+- 대신 "그룹 차원에서 진행되는 것으로 확인한 OOO" 또는
+  "OOO를 이 법인에서 직접 담당하시는지"처럼 확인형으로 쓰세요.
+- 전략의 '확인되지 않은 것'에 "이 사업의 실제 주관 법인"을 반드시 넣으세요.` : ''}`; })()}
+${(() => { const r = rs(c.name); if (!r.updated) return '';
+  return `
+### 재조사 결과 (${r.updated} 웹 확인 — 위 자료보다 이것을 우선하세요)
+- 현재 운영 사업: ${(r.programs || []).join(' / ') || '기재 없음'}
+- 운영 구조: ${r.structure || '기재 없음'}
+- 연락 경로: ${r.contact || '기재 없음'}
+- KMA 진입 지점: ${r.kmaAngle || '기재 없음'}
+- 확인 못 한 항목: ${(r.unknown || []).join(' / ') || '없음'}
+
+**위 '확인 못 한 항목'은 전략의 '확인되지 않은 것'에 그대로 옮기고, 추정으로 메우지 마세요.**
+**'(~연도 종료)'로 표기된 사업은 현재 사업으로 언급하지 마세요.**`; })()}
 ${_s3.v ? `
 ### 3차 선별 결과 (KMA 진입 가능성 실사)
 - 판정: ${_s3.v}
@@ -17323,9 +17472,117 @@ function downloadCsv() {
 }
 
 // ═══════════════════════════════════════════════════════
+// CCK CSV 직접 읽기 (cck.csv)
+// ───────────────────────────────────────────────────────
+// 시트를 복사한 사본을 만들지 않는다. CSV를 그대로 올려두고
+// 페이지가 열릴 때마다 읽는다. 시트가 바뀌면 CSV만 다시 올리면 끝.
+//
+// ★ 열을 '위치'가 아니라 '헤더 이름'으로 찾는다.
+//   위치로 찾다가 열이 밀려서 전화번호가 교육사업 비율 자리에 들어갔던
+//   사고가 있었다. 이름으로 찾으면 열 순서가 바뀌어도 안전하다.
+// ═══════════════════════════════════════════════════════
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cur); cur = ''; }
+    else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+    else if (ch !== '\r') cur += ch;
+  }
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+// 찾을 열: 내부이름 → 헤더에 들어 있는 문구
+const CCK_COLS = {
+  name:           '기업명',
+  intro:          '회사 간단 소개',
+  fields:         '주요 사업 분야',
+  publicPrograms: '주요 공개사업',
+  publicCount:    '공개 주요사업 수',
+  note:           '사업정보 참고',
+  homepage:       '홈페이지',
+  report:         '지속가능보고서',
+  csrhub:         'CSR Hub 상세',
+};
+
+function findCol(header, want) {
+  const norm = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+  const w = norm(want);
+  let i = header.findIndex(h => norm(h) === w);          // 정확히 일치 우선
+  if (i === -1) i = header.findIndex(h => norm(h).startsWith(w));
+  if (i === -1) i = header.findIndex(h => norm(h).includes(w));
+  return i;
+}
+
+async function loadCckCsv() {
+  try {
+    const res = await fetch('cck.csv', { cache: 'no-cache' });
+    if (!res.ok) { console.info('cck.csv 없음 — 건너뜀'); return; }
+    let text = new TextDecoder('utf-8').decode(await res.arrayBuffer());
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);   // BOM
+
+    const rows = parseCSV(text);
+    if (!rows.length) return;
+    const header = rows[0];
+
+    const idx = {};
+    const missing = [];
+    for (const k in CCK_COLS) {
+      idx[k] = findCol(header, CCK_COLS[k]);
+      if (idx[k] === -1) missing.push(CCK_COLS[k]);
+    }
+    if (idx.name === -1) { console.warn('cck.csv: 기업명 열을 찾지 못함'); return; }
+    if (missing.length) console.warn('cck.csv: 못 찾은 열 →', missing.join(', '));
+
+    const get = (r, k) => (idx[k] >= 0 ? String(r[idx[k]] || '').trim() : '');
+    const fromCsv = {};
+    let n = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const nm = get(r, 'name');
+      if (!nm) continue;                     // 설명행·빈행 건너뜀
+      const note = get(r, 'note');
+      fromCsv[nm] = {
+        intro:          get(r, 'intro'),
+        fields:         get(r, 'fields'),
+        publicPrograms: get(r, 'publicPrograms'),
+        publicCount:    get(r, 'publicCount'),
+        note:           note,
+        // ★ 그룹 공통 사업 경고 자동 판별
+        groupWarn:      /공통\s*표시|그룹\s*사업/.test(note),
+        homepage:       get(r, 'homepage'),
+        report:         get(r, 'report'),
+        csrhub:         get(r, 'csrhub'),
+      };
+      n++;
+    }
+
+    // 손으로 적은 cck_extra.js 값이 있으면 그쪽을 우선한다
+    window.CCK_EXTRA = Object.assign({}, fromCsv, window.CCK_EXTRA || {});
+    _cxidx = null;                            // 인덱스 재생성 강제
+
+    const warned = Object.values(fromCsv).filter(v => v.groupWarn).length;
+    console.info(`cck.csv 로드 완료 — ${n}곳 · 그룹사업 경고 ${warned}곳`);
+
+    renderList();
+    renderArea();   // 이미 열려 있던 카드도 새 데이터로 다시 그린다
+                    // (selectCompany를 부르면 생성된 결과가 지워지므로 쓰지 않는다)
+  } catch (e) {
+    console.warn('cck.csv 로드 실패:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════════════
 renderList();
+loadCckCsv();
 
 // 시트가 연동돼 있으면 페이지 열 때 자동으로 최신 기록 불러오기
 if (getSyncUrl()) {
