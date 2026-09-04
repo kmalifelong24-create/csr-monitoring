@@ -16242,6 +16242,16 @@ function rs(name) {
   return _rsidx[s3norm(name)] || {};
 }
 
+// kmaPoints 에 KMA 접점이 아니라 '사업 운영 형태' 값이 든 곳이 18곳 있다.
+//   실제 값: 기업 직접 진행형 / 기업 직접+외부협력형 / 재단 중심 위탁형 /
+//            재단 자체 목적사업형 / 혼합형 / 공모·지원사업형
+//   열거하면 빠지므로 "한 줄이고 짧고 '형'으로 끝나는가"로 판정한다.
+//   ※ 카드 렌더와 프롬프트 양쪽에서 쓰므로 반드시 최상위에 둔다.
+function isBizModel(s) {
+  const t = String(s || '').trim();
+  return t.length <= 14 && /형$/.test(t) && !/\s(제안|운영|교육|지원|양성)/.test(t);
+}
+
 // ─── 컨텍/제안 상태 트래킹 ───
 const STATUS_LABELS = {
   contacted: '📞 컨텍함',
@@ -16563,6 +16573,58 @@ function renderArea() {
     return eok >= 10 ? eok.toFixed(0) + '억원' : eok.toFixed(1) + '억원';
   }
 
+  // ═══════════════════════════════════════════════════════
+  // 분류기준 탭에 있던 '단서 조항'을 카드로 되살리는 헬퍼들
+  //   시트에서 숫자만 넘어오고 해석 주의사항이 탈락했던 부분을 복원한다.
+  // ═══════════════════════════════════════════════════════
+
+  // tender 필드는 실제로 두 가지가 섞여 있다.
+  //   ① 근거 URL 목록 (대부분)  ② 입찰 참가 이력 텍스트 ("21line 조회 불가" 등)
+  // 내용을 보고 라벨과 표시 방식을 나눈다.
+  function renderTender(v) {
+    const s = String(v || '').trim();
+    if (!s) return '';
+    const urls = s.match(/https?:\/\/\S+/g);
+    if (urls && urls.length) {
+      const links = urls.map((u, i) =>
+        '<a href="' + u + '" target="_blank" rel="noopener" style="color:#2563eb;margin-right:8px">' +
+        '[' + (i + 1) + '] ' + u.replace(/^https?:\/\//, '').split('/')[0] + '</a>').join('');
+      return '<div class="tender-tag">📎 근거 자료 <span style="color:#6b7280">· 조사 시 참고한 페이지</span><br>' + links + '</div>';
+    }
+    return '<div class="tender-tag">📋 입찰 참가 이력: ' + s + '</div>';
+  }
+
+  // externalCollab 에 척도값만 들어있는 경우가 18곳 있다.
+  // 실제 값: 고 / 중 / 저 / 중고 / 중~고  (물결표가 있는 것과 없는 것이 섞여 있다)
+  // 열거하면 빠지므로 "고·중·저·하와 구분기호로만 이루어졌는가"로 판정한다.
+  function renderCollab(v) {
+    const s = String(v || '').trim();
+    if (!s) return '';
+    const bare = s.replace(/[\s~∼～\-–—,/]/g, '');
+    if (bare.length <= 4 && /^(매우)?(고|중|저|하|상|높음|낮음|보통)+$/.test(bare)) {
+      return '<b>위탁 정도:</b> ' + s +
+             ' <span style="color:#6b7280;font-size:10px">(척도값 — 구체 구조는 미조사)</span>';
+    }
+    return s;
+  }
+
+  // isBizModel 은 최상위에 정의돼 있다 (프롬프트에서도 쓰기 때문)
+  function kmaPointsLabel(pts) {
+    const arr = (pts || []).filter(Boolean);
+    if (arr.length === 1 && isBizModel(arr[0])) return '🏷 사업 유형 <span style="font-weight:400;color:#6b7280;font-size:10px">· KMA 접점은 미조사</span>';
+    return '🎯 KMA 제안 접점';
+  }
+
+  // 분류기준 탭의 해석 주의사항
+  const NOTE_EDU_RATIO = '건수 기준 · 예산 비중 아님';
+  const NOTE_DONATION  = '사랑의열매 기준 · DART 공시와 별도';
+  const GRADE_NOTE = {
+    A: '교육 연관사업 2건 이상, 또는 1건 이상 + 연평균 10억 이상',
+    B: '교육 연관사업 1건 이상 (A 미달)',
+    C: '공개 주요사업은 있으나 교육사업 미확인',
+    D: '⚠️ 공개 주요사업 목록 자체가 없음 — 교육을 안 한다는 뜻이 아니라 정보가 없다는 뜻. 배제 대상이 아니라 직접 조사 대상',
+  };
+
   // ── CSR 아카이빙 전용 카드 (정성 데이터 중심) ───────────────────────────
   function renderCsrCard() {
     const keywords = (c.keywords || []).filter(k => k && k.trim());
@@ -16582,7 +16644,7 @@ function renderArea() {
           <div class="meta-value">${c.sector || '—'}</div>
         </div>
         <div class="meta-item">
-          <div class="meta-label">교육사업 비율</div>
+          <div class="meta-label" title="${NOTE_EDU_RATIO}">교육사업 비율 <span style="color:#9ca3af;font-weight:400">(건수)</span></div>
           <div class="meta-value">${c.eduRatioPct ? c.eduRatioPct + '%' : (c.eduRatioText ? '📝 아래 참조' : '—')}</div>
         </div>
         <div class="meta-item">
@@ -16611,7 +16673,7 @@ function renderArea() {
         <div class="card-section-label">📋 사회공헌 사업 현황 <span style="font-weight:400;color:#6b7280">· CCK 조사</span></div>
         ${x.groupWarn ? `<div style="margin-bottom:6px;padding:6px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#b91c1c;line-height:1.5"><b>⚠️ 그룹 공통 사업일 수 있음</b><br>${x.note || '동일한 공개 사업 목록이 여러 계열사에 공통 표시됨'}<br><b>→ 이 사업을 이 회사가 직접 운영한다고 단정하지 마세요.</b></div>` : ''}
         ${x.fields ? `<div style="font-size:11px;color:#374151;line-height:1.6"><b>사업 분야:</b> ${x.fields}</div>` : ''}
-        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${x.publicCount ? ' (총 ' + x.publicCount + '개 중 3개)' : ''}:</b> ${x.publicPrograms}</div>` : ''}
+        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${(() => { const t = parseInt(x.publicCount, 10), s = x.publicPrograms.split(' / ').length; return t > 0 ? (t > s ? ` (총 ${t}개 중 ${s}개)` : ` (총 ${t}개)`) : ''; })()}:</b> ${x.publicPrograms}</div>` : ''}
         ${x.intro ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;line-height:1.6">${x.intro}</div>` : ''}
         <div style="margin-top:6px;font-size:10px">
           ${x.homepage ? `<a href="${x.homepage}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">🔗 홈페이지</a>` : ''}
@@ -16624,14 +16686,14 @@ function renderArea() {
       ${c.externalCollab ? `
       <div class="card-section">
         <div class="card-section-label">🤝 외부 협력 · 위탁 구조</div>
-        <div class="collab-box">${c.externalCollab}</div>
+        <div class="collab-box">${renderCollab(c.externalCollab)}</div>
         ${c.partners ? `<div style="margin-top:6px;font-size:11px;color:#374151;line-height:1.5"><b>협력사 정보:</b> ${c.partners}</div>` : ''}
-        ${c.tender ? `<div class="tender-tag">📋 입찰 이력: ${c.tender}</div>` : ''}
+        ${renderTender(c.tender)}
       </div>` : (c.partners ? `
       <div class="card-section">
         <div class="card-section-label">🤝 협력사 · 위탁 정보</div>
         <div class="collab-box">${c.partners}</div>
-        ${c.tender ? `<div class="tender-tag">📋 입찰 이력: ${c.tender}</div>` : ''}
+        ${renderTender(c.tender)}
       </div>` : '')}
 
       <!-- 핵심가치 -->
@@ -16659,7 +16721,7 @@ function renderArea() {
       ${c.kmaPoints && c.kmaPoints.length > 0 ? `
       <div class="card-section">
         <div class="kma-points" style="margin:0">
-          <div class="kma-points-label">🎯 KMA 제안 접점</div>
+          <div class="kma-points-label">${kmaPointsLabel(c.kmaPoints)}</div>
           ${c.kmaPoints.map(p => `<div class="kma-point">${p}</div>`).join('')}
         </div>
       </div>` : ''}
@@ -16667,7 +16729,7 @@ function renderArea() {
       <!-- 교육사업 비율 텍스트 -->
       ${c.eduRatioText ? `
       <div class="card-section">
-        <div class="card-section-label">📊 교육사업 비율 (조사 기록)</div>
+        <div class="card-section-label">📊 교육사업 비율 (조사 기록) <span style="font-weight:400;color:#6b7280;font-size:10px">· ${NOTE_EDU_RATIO}</span></div>
         <div class="edu-ratio-text">${c.eduRatioText}</div>
       </div>` : ''}
 
@@ -16694,7 +16756,8 @@ function renderArea() {
       <!-- 헤더 -->
       <div class="company-card-header">
         <span class="company-card-name">${c.name}</span>
-        ${c.priority ? `<span class="priority-chip chip-${c.priority}">제안 ${c.priority}등급</span>` : ''}
+        ${c.priority ? `<span class="priority-chip chip-${c.priority}" title="${GRADE_NOTE[c.priority] || ''}">제안 ${c.priority}등급</span>` : ''}
+        ${c.priority === 'D' ? `<div style="margin-top:6px;padding:6px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:11px;color:#92400e;line-height:1.5"><b>⚠️ D등급 = 공개정보 부족</b><br>CSR Hub에 사업 목록이 없다는 뜻이며, <b>교육사업을 하지 않는다는 뜻이 아닙니다.</b> 배제 대상이 아니라 직접 조사가 필요한 대상입니다.</div>` : ''}
         <span class="source-badge source-cck">📊 CCK 기업 분석</span>
       </div>
 
@@ -16706,7 +16769,7 @@ function renderArea() {
         </div>
         ${c.avgDonation ? `
         <div class="meta-item">
-          <div class="meta-label">연평균 기부금 (22~25)</div>
+          <div class="meta-label" title="${NOTE_DONATION}">연평균 기부금 (22~25) <span style="color:#9ca3af;font-weight:400">· 사랑의열매</span></div>
           <div class="meta-value"><span class="donation-highlight">${donationStr(c.avgDonation)}</span></div>
         </div>` : ''}
         ${c.eduCount ? `
@@ -16736,7 +16799,7 @@ function renderArea() {
         <div class="card-section-label">📋 사회공헌 사업 현황 <span style="font-weight:400;color:#6b7280">· CCK 조사</span></div>
         ${x.groupWarn ? `<div style="margin-bottom:6px;padding:6px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#b91c1c;line-height:1.5"><b>⚠️ 그룹 공통 사업일 수 있음</b><br>${x.note || '동일한 공개 사업 목록이 여러 계열사에 공통 표시됨'}<br><b>→ 이 사업을 이 회사가 직접 운영한다고 단정하지 마세요.</b></div>` : ''}
         ${x.fields ? `<div style="font-size:11px;color:#374151;line-height:1.6"><b>사업 분야:</b> ${x.fields}</div>` : ''}
-        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${x.publicCount ? ' (총 ' + x.publicCount + '개 중 3개)' : ''}:</b> ${x.publicPrograms}</div>` : ''}
+        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${(() => { const t = parseInt(x.publicCount, 10), s = x.publicPrograms.split(' / ').length; return t > 0 ? (t > s ? ` (총 ${t}개 중 ${s}개)` : ` (총 ${t}개)`) : ''; })()}:</b> ${x.publicPrograms}</div>` : ''}
         ${x.intro ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;line-height:1.6">${x.intro}</div>` : ''}
         <div style="margin-top:6px;font-size:10px">
           ${x.homepage ? `<a href="${x.homepage}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">🔗 홈페이지</a>` : ''}
@@ -16763,7 +16826,7 @@ function renderArea() {
       ${c.kmaPoints && c.kmaPoints.length > 0 ? `
       <div class="card-section">
         <div class="kma-points" style="margin:0">
-          <div class="kma-points-label">🎯 KMA 진입 포인트</div>
+          <div class="kma-points-label">${kmaPointsLabel(c.kmaPoints)}</div>
           ${c.kmaPoints.map(p => `<div class="kma-point">${p}</div>`).join('')}
         </div>
       </div>` : ''}
@@ -16771,7 +16834,7 @@ function renderArea() {
       <!-- 교육사업 비율 텍스트 -->
       ${c.eduRatioText ? `
       <div class="card-section">
-        <div class="card-section-label">📊 교육사업 비율 (조사 기록)</div>
+        <div class="card-section-label">📊 교육사업 비율 (조사 기록) <span style="font-weight:400;color:#6b7280;font-size:10px">· ${NOTE_EDU_RATIO}</span></div>
         <div class="edu-ratio-text">${c.eduRatioText}</div>
       </div>` : ''}
 
@@ -16796,7 +16859,8 @@ function renderArea() {
     <div class="company-card">
       <div class="company-card-header">
         <span class="company-card-name">${c.name}</span>
-        ${c.priority ? `<span class="priority-chip chip-${c.priority}">제안 ${c.priority}등급</span>` : ''}
+        ${c.priority ? `<span class="priority-chip chip-${c.priority}" title="${GRADE_NOTE[c.priority] || ''}">제안 ${c.priority}등급</span>` : ''}
+        ${c.priority === 'D' ? `<div style="margin-top:6px;padding:6px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:11px;color:#92400e;line-height:1.5"><b>⚠️ D등급 = 공개정보 부족</b><br>CSR Hub에 사업 목록이 없다는 뜻이며, <b>교육사업을 하지 않는다는 뜻이 아닙니다.</b> 배제 대상이 아니라 직접 조사가 필요한 대상입니다.</div>` : ''}
         ${recBadge(c.recommendation)}
         <div class="source-badges" style="margin-left:auto">
           <span class="source-badge source-csr">CSR 아카이빙</span>
@@ -16811,7 +16875,7 @@ function renderArea() {
         </div>
         ${c.avgDonation ? `
         <div class="meta-item">
-          <div class="meta-label">연평균 기부금 (22~25)</div>
+          <div class="meta-label" title="${NOTE_DONATION}">연평균 기부금 (22~25) <span style="color:#9ca3af;font-weight:400">· 사랑의열매</span></div>
           <div class="meta-value"><span class="donation-highlight">${donationStr(c.avgDonation)}</span></div>
         </div>` : '<div class="meta-item"></div>'}
         ${c.eduCount ? `
@@ -16820,7 +16884,7 @@ function renderArea() {
           <div class="meta-value">${c.eduCount}개${c.eduRatioPct ? ' · ' + c.eduRatioPct + '%' : ''}</div>
         </div>` : '<div class="meta-item"></div>'}
         <div class="meta-item">
-          <div class="meta-label">교육사업 비율</div>
+          <div class="meta-label" title="${NOTE_EDU_RATIO}">교육사업 비율 <span style="color:#9ca3af;font-weight:400">(건수)</span></div>
           <div class="meta-value">${c.eduRatioPct ? c.eduRatioPct + '%' : (c.eduRatioText ? '📝 아래 참조' : '—')}</div>
         </div>
       </div>
@@ -16845,7 +16909,7 @@ function renderArea() {
         <div class="card-section-label">📋 사회공헌 사업 현황 <span style="font-weight:400;color:#6b7280">· CCK 조사</span></div>
         ${x.groupWarn ? `<div style="margin-bottom:6px;padding:6px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;color:#b91c1c;line-height:1.5"><b>⚠️ 그룹 공통 사업일 수 있음</b><br>${x.note || '동일한 공개 사업 목록이 여러 계열사에 공통 표시됨'}<br><b>→ 이 사업을 이 회사가 직접 운영한다고 단정하지 마세요.</b></div>` : ''}
         ${x.fields ? `<div style="font-size:11px;color:#374151;line-height:1.6"><b>사업 분야:</b> ${x.fields}</div>` : ''}
-        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${x.publicCount ? ' (총 ' + x.publicCount + '개 중 3개)' : ''}:</b> ${x.publicPrograms}</div>` : ''}
+        ${x.publicPrograms ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.6"><b>공개 사업${(() => { const t = parseInt(x.publicCount, 10), s = x.publicPrograms.split(' / ').length; return t > 0 ? (t > s ? ` (총 ${t}개 중 ${s}개)` : ` (총 ${t}개)`) : ''; })()}:</b> ${x.publicPrograms}</div>` : ''}
         ${x.intro ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;line-height:1.6">${x.intro}</div>` : ''}
         <div style="margin-top:6px;font-size:10px">
           ${x.homepage ? `<a href="${x.homepage}" target="_blank" rel="noopener" style="color:#2563eb;margin-right:10px">🔗 홈페이지</a>` : ''}
@@ -16858,14 +16922,14 @@ function renderArea() {
       ${c.externalCollab ? `
       <div class="card-section">
         <div class="card-section-label">🤝 외부 협력 · 위탁 구조</div>
-        <div class="collab-box">${c.externalCollab}</div>
+        <div class="collab-box">${renderCollab(c.externalCollab)}</div>
         ${c.partners ? `<div style="margin-top:6px;font-size:11px;color:#374151;line-height:1.5"><b>협력사 정보:</b> ${c.partners}</div>` : ''}
-        ${c.tender ? `<div class="tender-tag">📋 입찰 이력: ${c.tender}</div>` : ''}
+        ${renderTender(c.tender)}
       </div>` : (c.partners ? `
       <div class="card-section">
         <div class="card-section-label">🤝 협력사 · 위탁 정보</div>
         <div class="collab-box">${c.partners}</div>
-        ${c.tender ? `<div class="tender-tag">📋 입찰 이력: ${c.tender}</div>` : ''}
+        ${renderTender(c.tender)}
       </div>` : '')}
 
       <!-- 핵심가치 -->
@@ -16900,7 +16964,7 @@ function renderArea() {
       ${c.kmaPoints && c.kmaPoints.length > 0 ? `
       <div class="card-section">
         <div class="kma-points" style="margin:0">
-          <div class="kma-points-label">🎯 KMA 진입 포인트</div>
+          <div class="kma-points-label">${kmaPointsLabel(c.kmaPoints)}</div>
           ${c.kmaPoints.map(p => `<div class="kma-point">${p}</div>`).join('')}
         </div>
       </div>` : ''}
@@ -16908,7 +16972,7 @@ function renderArea() {
       <!-- 교육사업 비율 텍스트 -->
       ${c.eduRatioText ? `
       <div class="card-section">
-        <div class="card-section-label">📊 교육사업 비율 (조사 기록)</div>
+        <div class="card-section-label">📊 교육사업 비율 (조사 기록) <span style="font-weight:400;color:#6b7280;font-size:10px">· ${NOTE_EDU_RATIO}</span></div>
         <div class="edu-ratio-text">${c.eduRatioText}</div>
       </div>` : ''}
 
@@ -17246,14 +17310,32 @@ function buildPrompt(c, news) {
 - 핵심가치·방향성: ${c.coreValues || '미확인'}
 - 키워드: ${(c.keywords || []).join(', ') || '미확인'}
 - 연평균 기부금(사랑의열매 기준): ${donation}
+  ※ 사랑의열매 플랫폼 공개치이며 DART 공시 기부금과 다릅니다. 기업의 전체 사회공헌 예산이 아닙니다.
 - 교육사업 규모: ${eduScale}
+  ※ 이 비율은 **공개된 사업 건수 중 교육사업 건수의 비율**입니다.
+     예산 비중이 아니고 사회공헌 포트폴리오 비중도 아닙니다.
+     "교육에 예산의 OO%를 쓰신다"처럼 쓰지 마세요.
+${c.priority === 'D' ? `
+⚠️ **D등급 해석 주의** — 이 기업은 CSR Hub에 공개된 주요사업 목록이 없습니다.
+교육사업을 하지 않는다는 뜻이 아니라 **공개정보가 없다는 뜻**입니다.
+- "교육 사회공헌을 하지 않으시는" 같은 단정을 절대 쓰지 마세요.
+- 사업 실적을 언급할 근거가 없으므로, 기업 현황(업종·규모)과 KMA 역량 중심으로 쓰세요.
+- 전략의 '확인되지 않은 것' 첫 항목에 "현재 교육 사회공헌 사업의 유무와 내용"을 넣으세요.` : ''}
 - 주요 사업·프로그램: ${(c.mainPrograms || []).join(' / ') || '미확인'}
 - 프로그램 성격: ${c.programChar || '미확인'}
 - 외부 협력·위탁 정도: ${c.externalCollab || '미확인'}
 - 협력사·위탁사 정보: ${c.partners || '미확인'}
 - 입찰 참가 이력: ${c.tender || '미확인'}
 - KMA 연관 분야: ${(c.kmaFields || []).join(' / ') || '미확인'}
-- KMA 진입 포인트(사전 분석): ${(c.kmaPoints || []).join(' / ') || '미확인'}
+${(() => {
+  const pts = (c.kmaPoints || []).filter(Boolean);
+  if (!pts.length) return '- KMA 진입 포인트(사전 분석): 미확인';
+  if (pts.length === 1 && isBizModel(pts[0]))
+    return `- 사업 유형: ${pts[0]}\n` +
+           `- KMA 진입 포인트(사전 분석): **미확인** — 위 값은 사업 운영 형태이지 KMA 접점이 아닙니다.\n` +
+           `  접점이 분석된 바 없으므로, 접점을 아는 것처럼 쓰지 말고 KMA 역량에서 출발해 제안하세요.`;
+  return `- KMA 진입 포인트(사전 분석): ${pts.join(' / ')}`;
+})()}
 - 연락처 정보: ${c.contact || '미확인'}
 - 홈페이지: ${c.homepage || cx(c.name).homepage || '미확인'}
 ${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.intro) return '';
