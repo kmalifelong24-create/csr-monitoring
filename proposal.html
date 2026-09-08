@@ -292,6 +292,10 @@
       <button class="f-btn f3-pass" onclick="setFilter('s3pass',this)">🎯 3차 선별</button>
       <button class="f-btn f3-check" onclick="setFilter('s3check',this)">❓ 확인 불가</button>
       <button class="f-btn f3-out" onclick="setFilter('s3out',this)">🚫 3차 제외</button>
+      <span class="filter-divider" title="재조사 상태"></span>
+      <button class="f-btn" onclick="setFilter('rs_done',this)" title="웹으로 최신 확인을 마친 기업">🔄 재조사 완료 <b id="cnt_rsdone">0</b></button>
+      <button class="f-btn" onclick="setFilter('rs_tried',this)" title="조사했으나 공개자료가 없던 기업 — 전화 확인 대상">🔍 자료 없음 <b id="cnt_rstried">0</b></button>
+      <button class="f-btn" onclick="setFilter('rs_none',this)" title="아직 재조사하지 않은 기업">⏳ 재조사 미실시 <b id="cnt_rsnone">0</b></button>
       <span class="filter-divider" title="진행 상태"></span>
       <button class="f-btn fs-contacted" onclick="setFilter('st_contacted',this)">📞 컨텍함 <b id="cnt_contacted">0</b></button>
       <button class="f-btn fs-proposed" onclick="setFilter('st_proposed',this)">✉️ 제안 발송 <b id="cnt_proposed">0</b></button>
@@ -16242,6 +16246,26 @@ function rs(name) {
   return _rsidx[s3norm(name)] || {};
 }
 
+// ═══════════════════════════════════════════════════════
+// 조사 상태 — 세 가지를 구분한다
+//   done   : 재조사 완료 (research.js에 있음)
+//   tried  : 조사했으나 공개자료 확보 실패 (RESEARCH_TRIED에 있음)
+//   none   : 아직 조사하지 않음
+// tried를 별도로 두는 이유: 같은 검색을 반복하지 않기 위해서다.
+// "자료가 없다"는 것도 조사 결과다.
+// ═══════════════════════════════════════════════════════
+let _trIdx = null;
+function researchTried(name) {
+  const src = window.RESEARCH_TRIED || {};
+  if (!_trIdx) { _trIdx = {}; for (const k in src) _trIdx[s3norm(k)] = src[k]; }
+  return _trIdx[s3norm(name)] || '';
+}
+function researchStatus(name) {
+  if (Object.keys(rs(name)).length) return 'done';
+  if (researchTried(name)) return 'tried';
+  return 'none';
+}
+
 // kmaPoints 에 KMA 접점이 아니라 '사업 운영 형태' 값이 든 곳이 18곳 있다.
 //   실제 값: 기업 직접 진행형 / 기업 직접+외부협력형 / 재단 중심 위탁형 /
 //            재단 자체 목적사업형 / 혼합형 / 공모·지원사업형
@@ -16438,6 +16462,15 @@ function updateStatusCounts() {
   }
   const none = document.getElementById('cnt_none');
   if (none) none.textContent = COMPANY_DATA.length - tracked;
+
+  // 재조사 상태 카운트
+  const r = { done: 0, tried: 0, none: 0 };
+  COMPANY_DATA.forEach(co => { r[researchStatus(co.name)]++; });
+  const m = { rsdone: r.done, rstried: r.tried, rsnone: r.none };
+  for (const k in m) {
+    const el = document.getElementById('cnt_' + k);
+    if (el) el.textContent = m[k];
+  }
 }
 
 function renderList() {
@@ -16457,6 +16490,7 @@ function renderList() {
     if (currentFilter === 's3pass')  return s3Verdict(c.name) === '3차 선별';
     if (currentFilter === 's3check') return s3Verdict(c.name) === '확인 불가';
     if (currentFilter === 's3out')   return s3Verdict(c.name) === '제외';
+    if (currentFilter.startsWith('rs_')) return researchStatus(c.name) === currentFilter.slice(3);
     if (currentFilter.startsWith('st_')) {
       const want = currentFilter.slice(3);
       const t = getTracking(c.name);
@@ -16666,6 +16700,27 @@ function renderArea() {
         ${(r.sources || []).length ? `<div style="margin-top:6px;font-size:10px;color:#6b7280">출처: ${(r.sources || []).map(u => '<a href="' + u + '" target="_blank" rel="noopener" style="color:#2563eb">' + u.replace(/^https?:\/\//, '').slice(0, 38) + '</a>').join(' · ')}</div>` : ''}
       </div>`; })()}
 
+      <!-- 재조사 상태 — 완료가 아닌 경우에만 표시 -->
+      ${(() => {
+        const st = researchStatus(c.name);
+        if (st === 'done') return '';
+        if (st === 'tried') return `
+      <div class="card-section">
+        <div style="padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;font-size:11px;color:#475569;line-height:1.6">
+          <b>🔍 웹 재조사 시도함 — 공개자료 확보 실패</b><br>
+          ${researchTried(c.name)}<br>
+          <span style="color:#64748b">같은 검색을 반복하지 마세요. 이 기업은 <b>전화·직접 문의</b>로만 확인 가능합니다.</span>
+        </div>
+      </div>`;
+        return `
+      <div class="card-section">
+        <div style="padding:8px 10px;background:#fefce8;border:1px solid #fde68a;border-radius:7px;font-size:11px;color:#854d0e;line-height:1.6">
+          <b>⏳ 재조사 미실시</b> — 아래 정보는 CCK·CSR 시트 수집분이며 최신 확인을 거치지 않았습니다.<br>
+          <span style="color:#a16207">사회공헌 사업은 매년 바뀝니다. 제안 전 홈페이지·공고를 한 번 확인하세요.</span>
+        </div>
+      </div>`;
+      })()}
+
       <!-- CCK 시트 보강 (cck_extra.js) -->
       ${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.homepage) return '';
         return `
@@ -16792,6 +16847,27 @@ function renderArea() {
         ${(r.sources || []).length ? `<div style="margin-top:6px;font-size:10px;color:#6b7280">출처: ${(r.sources || []).map(u => '<a href="' + u + '" target="_blank" rel="noopener" style="color:#2563eb">' + u.replace(/^https?:\/\//, '').slice(0, 38) + '</a>').join(' · ')}</div>` : ''}
       </div>`; })()}
 
+      <!-- 재조사 상태 — 완료가 아닌 경우에만 표시 -->
+      ${(() => {
+        const st = researchStatus(c.name);
+        if (st === 'done') return '';
+        if (st === 'tried') return `
+      <div class="card-section">
+        <div style="padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;font-size:11px;color:#475569;line-height:1.6">
+          <b>🔍 웹 재조사 시도함 — 공개자료 확보 실패</b><br>
+          ${researchTried(c.name)}<br>
+          <span style="color:#64748b">같은 검색을 반복하지 마세요. 이 기업은 <b>전화·직접 문의</b>로만 확인 가능합니다.</span>
+        </div>
+      </div>`;
+        return `
+      <div class="card-section">
+        <div style="padding:8px 10px;background:#fefce8;border:1px solid #fde68a;border-radius:7px;font-size:11px;color:#854d0e;line-height:1.6">
+          <b>⏳ 재조사 미실시</b> — 아래 정보는 CCK·CSR 시트 수집분이며 최신 확인을 거치지 않았습니다.<br>
+          <span style="color:#a16207">사회공헌 사업은 매년 바뀝니다. 제안 전 홈페이지·공고를 한 번 확인하세요.</span>
+        </div>
+      </div>`;
+      })()}
+
       <!-- CCK 시트 보강 (cck_extra.js / cck.csv) -->
       ${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.homepage) return '';
         return `
@@ -16901,6 +16977,27 @@ function renderArea() {
         ${(r.unknown || []).length ? `<div style="margin-top:6px;padding:6px 8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:11px;color:#9a3412;line-height:1.5"><b>❓ 확인 못 한 것 — 통화로 확인할 항목</b><br>${(r.unknown || []).map(u => '· ' + u).join('<br>')}</div>` : ''}
         ${(r.sources || []).length ? `<div style="margin-top:6px;font-size:10px;color:#6b7280">출처: ${(r.sources || []).map(u => '<a href="' + u + '" target="_blank" rel="noopener" style="color:#2563eb">' + u.replace(/^https?:\/\//, '').slice(0, 38) + '</a>').join(' · ')}</div>` : ''}
       </div>`; })()}
+
+      <!-- 재조사 상태 — 완료가 아닌 경우에만 표시 -->
+      ${(() => {
+        const st = researchStatus(c.name);
+        if (st === 'done') return '';
+        if (st === 'tried') return `
+      <div class="card-section">
+        <div style="padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;font-size:11px;color:#475569;line-height:1.6">
+          <b>🔍 웹 재조사 시도함 — 공개자료 확보 실패</b><br>
+          ${researchTried(c.name)}<br>
+          <span style="color:#64748b">같은 검색을 반복하지 마세요. 이 기업은 <b>전화·직접 문의</b>로만 확인 가능합니다.</span>
+        </div>
+      </div>`;
+        return `
+      <div class="card-section">
+        <div style="padding:8px 10px;background:#fefce8;border:1px solid #fde68a;border-radius:7px;font-size:11px;color:#854d0e;line-height:1.6">
+          <b>⏳ 재조사 미실시</b> — 아래 정보는 CCK·CSR 시트 수집분이며 최신 확인을 거치지 않았습니다.<br>
+          <span style="color:#a16207">사회공헌 사업은 매년 바뀝니다. 제안 전 홈페이지·공고를 한 번 확인하세요.</span>
+        </div>
+      </div>`;
+      })()}
 
       <!-- CCK 시트 보강 (cck_extra.js) -->
       ${(() => { const x = cx(c.name); if (!x.publicPrograms && !x.fields && !x.homepage) return '';
@@ -17364,6 +17461,25 @@ ${(() => { const r = rs(c.name); if (!r.updated) return '';
 **위 '확인 못 한 항목'은 전략의 '확인되지 않은 것'에 그대로 옮기고, 추정으로 메우지 마세요.**
 **'(~연도 종료)'로 표기된 사업은 현재 사업으로 언급하지 마세요.**`; })()}
 ${(() => {
+  const st = researchStatus(c.name);
+  if (st === 'done') return '';
+  if (st === 'tried') return `
+### 🔍 이 기업은 웹 재조사를 시도했으나 공개자료를 확보하지 못했습니다
+조사 기록: ${researchTried(c.name)}
+
+**즉 아래 데이터는 CCK·CSR 시트 수집분이 전부이고, 최신 확인이 되지 않았습니다.**
+- 사업 내용을 현재형으로 단정하지 마세요. "~을 운영하고 계신 것으로 알고 있습니다" 같은 확정 표현을 피하세요.
+- 전략의 '확인되지 않은 것' 첫 항목에 **"현재 교육 사회공헌 사업의 내용과 규모"**를 넣으세요.
+- 이 기업은 공개자료가 없으므로 **통화가 유일한 확인 수단**입니다. 전화 스크립트를 정보 확인 중심으로 구성하세요.`;
+  return `
+### ⏳ 이 기업은 아직 웹 재조사를 하지 않았습니다
+아래 데이터는 CCK·CSR 시트 수집분(2026년 7월 기준)이며 **최신 확인을 거치지 않았습니다.**
+
+- 사회공헌 사업은 매년 개편됩니다. 실제로 재조사한 기업 중 **SK하이닉스는 대표 교육사업이 2024년에 종료**돼 있었습니다.
+- 사업명을 확정해서 인용할 때는 **"공개자료에서 확인한"**이라는 단서를 붙이세요.
+- 전략의 '통화 직전 점검'에 **"이 사업이 현재도 운영 중인지"**를 넣으세요.`;
+})()}
+${(() => {
   const r = rs(c.name);
   const hasCollab = !!(String(c.externalCollab || '').trim() || String(c.partners || '').trim() || String(r.structure || '').trim());
   if (hasCollab) return '';
@@ -17388,6 +17504,29 @@ ${_s3.v ? `
 - 확인된 수행구조: ${_s3.s || '기재 없음'}
 - KMA 예상 진입경로: ${_s3.p || '기재 없음'}` : ''}
 ${stage3Directive(_s3.v, _s3)}
+${(() => {
+  // 3차 선별(시트 기준)과 재조사(웹 확인)가 어긋나는 경우를 조정한다.
+  //   3차 선별 = "외부와 함께 운영한 선례가 있는가"
+  //   재조사   = "교육 운영을 실제로 외부에 발주하는가"
+  //   둘 다 사실일 수 있으나, 지시가 상충하면 **더 최근에 직접 확인한 재조사가 우선**이다.
+  //   (3차 지시문이 뒤에 오므로 여기서 다시 덮어써야 한다)
+  const r = rs(c.name);
+  if (!r.updated || _s3.v !== '3차 선별') return '';
+  const closed = /진입 여지 없음|우선순위 최하|위탁 시장이 사실상 닫|외부 발주 이력이|자체 강사|임직원 강사|인하우스/
+                 .test(String(r.structure || '') + String(r.kmaAngle || ''));
+  if (!closed) return '';
+  return `
+### ⚠️ 위 3차 선별 지시문보다 이것을 우선하세요
+3차 선별은 "외부와 함께 운영한 선례가 있는가"를 본 판정이고,
+재조사(${r.updated})는 "교육 운영을 실제로 외부에 발주하는가"를 직접 확인한 결과입니다.
+**이 기업은 협업 선례는 있으나 교육 운영을 외부에 맡기지 않는 것으로 확인됐습니다.**
+
+- "이미 외부 협력을 하고 계시니 그 다음 단계를" 같은 전제를 쓰지 마세요. 위탁 발주를 하지 않는 곳입니다.
+- 기존 수행사를 대체하겠다는 구도로 쓰지 마세요. 대체할 수행사가 없습니다.
+- 대신 **지금 자체적으로 감당하고 있는 운영 부담**(강사 조달·교안 개발·성과관리 등)에서 출발하세요.
+- 전략의 '확인되지 않은 것'에 **"외부 위탁을 검토할 의향이 있는지"**를 넣으세요. 이것이 이 기업의 핵심 미확인 사항입니다.
+- 기대치를 낮춰 쓰세요. 즉시 계약보다 관계 형성이 현실적인 목표입니다.`;
+})()}
 ${news.length > 0 ? `
 ## 최근 동향 (모니터링 수집)
 ${news.map(n => `- [${n.date}] ${n.title} (${n.type === 'recruit' ? '모집 공고 — ' + n.trackWhen : '뉴스'})`).join('\n')}` : ''}
